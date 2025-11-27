@@ -1,0 +1,29 @@
+# Reference folders (large, not needed for the converter)
+furnace/
+PMDDotNET/
+pmdmini/
+chipchune/
+vgm2fur/
+pmd2mml/
+
+# PMD input files
+TH4 - LLS/
+*.M
+*.M2
+
+# Output files
+*.fur
+
+# Python
+__pycache__/
+*.pyc
+
+# Temp/debug files
+*.txt
+*.bin
+*_patterns/
+
+# Keep these
+!README.md
+!convert_th4.bat
+
