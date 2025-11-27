@@ -1,0 +1,310 @@
+#Title		輝く針の小人族　～ Little Princess
+#Composer	ＺＵＮ（太田）
+#Arranger	HertzDevil
+#Memo		少名 針妙丸のテーマです。
+#memo		小さい身体なりの格好良い曲にしました。
+#memo		重厚さは少ないですが、如何にもラスボスっぽい気持ちの良い
+#memo		広がり方のする曲になってると思います。
+#memo		あれ？　小さくないって？　まあ是非クリアして下さいな。
+#Option		/v/c
+#Filename	.M2
+
+;;; INSTRUMENTS
+
+@023 4 7
+ 31 0 0 2 0 30 3 4 3 0
+ 31 2 0 7 3 0 0 4 3 0
+ 31 0 0 2 0 31 3 2 7 0
+ 31 2 0 7 3 0 0 4 7 0
+
+@027 3 6
+ 24 8 1 8 1 13 0 6 3 0
+ 26 8 3 8 3 30 0 2 7 0
+ 26 8 3 8 3 28 0 1 7 0
+ 26 0 0 9 0 0 0 2 3 0
+
+@043 5 7
+ 31 0 0 0 0 28 0 2 0 0
+ 31 14 3 15 3 0 0 8 0 0
+ 31 14 3 15 3 0 0 4 0 0
+ 31 14 3 15 3 0 0 4 0 0
+
+@047 2 7
+ 28 0 0 7 0 25 1 1 3 0
+ 28 16 8 7 4 28 1 12 3 0
+ 28 0 0 7 0 45 1 1 4 0
+ 17 0 0 9 0 0 1 2 0 1
+
+@099 5 7
+ 31 0 0 0 0 29 0 1 0 0
+ 31 14 3 15 3 0 0 1 0 0
+ 31 14 3 15 3 0 0 1 0 0
+ 31 14 3 15 3 0 0 1 0 0
+
+@101 4 7
+ 28 0 8 0 3 32 2 12 3 0
+ 26 10 7 6 2 0 1 4 3 0
+ 28 0 8 0 3 30 2 12 7 0
+ 26 10 7 6 2 0 1 4 7 0
+
+@166 2 5
+ 31 0 0 0 0 30 0 8 3 0
+ 31 0 0 0 0 25 0 6 2 0
+ 31 0 0 0 0 25 0 2 5 0
+ 18 0 0 7 0 0 0 8 7 0
+
+@250 5 7
+ 31 3 4 15 0 29 0 4 1 0
+ 21 1 4 15 0 0 0 8 1 0
+ 31 6 4 15 0 0 0 2 1 0
+ 21 1 4 15 0 0 0 4 0 0
+
+;;; THE MACRO
+
+!riff	l8 br4.bbr4brbrbbr4
+
+;;; INIT
+
+G	T203 DF26 DS18 DR32
+ABCDEF	MXA1 MXB1 _M0
+GHIJ	MXA1 MXB1 _M0
+ABCDEGH	q0 D0 *0 L
+K	q0 D0 *0 L
+
+;;; PART 1 INTRO
+
+AC	@27 q2 V113 l8 o2 |C D2 |
+AC	[!riff]4
+AC	[!riff __1 !riff __1 !riff: __-1 !riff __-1]2 __1 [!riff _2]3
+
+B	@23 V115 l1
+B	o2 rl^4 bl^2bl^2
+B	[f+l^2gl^2g+l^2:gl^2 __12]2 al^2__-12
+B	>g+l^4
+
+DE	@27 V113 D2 l1
+DE	|E _7 | o2 bl^2bl^2bl^2bl^2>)
+DE	|E _-5 | [bl^2>cl^2c+l^2:cl^2]2 dl^2<(
+DE	|E _7 | c+l^4
+
+GH	r1l^4 E1,0,0,0 Q2
+G	o4 v14 l16
+H	o5 v13 l8
+G	      b   b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2e S0e >S1,-2c+S0c+
+H	      b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1e     >S1,-1c+
+G	 <S1,2f+S0f+>S1,-2d S0d<S1,2e S0e>S1,-2c+S0c+<S1,2dS0d S1,-2bS0b S1,2c+S0c+ S1,-2a S0a
+H	 <S1,1f+    >S1,-1d    <S1,1e    >S1,-1c+    <S1,1d    S1,-1b    S1,1c+     S1,-1a
+G	 <S1,2b S0b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2c+S0c+ S1,-2a S0a
+H	 <S1,1b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1c+     S1,-1a
+G	  S1,2d S0d  S1,-2f+S0f+S1,2c+S0c+S1,-2e S0e <S1,2bS0b>S1,-2dS0d<S1,2f+S0f+>S1,-2c+S0c+
+H	  S1,1d      S1,-1f+    S1,1c+    S1,-1e     <S1,1b   >S1,-1d   <S1,1f+    >S1,-1c+
+G	[<S1,2b S0b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2e S0e >S1,-2c+S0c+
+H	[<S1,1b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1e     >S1,-1c+
+G	 <S1,2f+S0f+>S1,-2d S0d<S1,2e S0e>S1,-2c+S0c+<S1,2dS0d S1,-2bS0b S1,2c+S0c+ S1,-2a S0a  _1
+H	 <S1,1f+    >S1,-1d    <S1,1e    >S1,-1c+    <S1,1d    S1,-1b    S1,1c+     S1,-1a      _1
+G	 <S1,2b S0b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2c+S0c+ S1,-2a S0a
+H	 <S1,1b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1c+     S1,-1a
+G	  S1,2d S0d  S1,-2f+S0f+S1,2c+S0c+S1,-2e S0e <S1,2bS0b>S1,-2dS0d<S1,2f+S0f+>S1,-2c+S0c+ _2
+H	  S1,1d      S1,-1f+    S1,1c+    S1,-1e     <S1,1b   >S1,-1d   <S1,1f+    >S1,-1c+     _2
+G	 <S1,2b S0b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2e S0e >S1,-2c+S0c+
+H	 <S1,1b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1e     >S1,-1c+
+G	 <S1,2f+S0f+>S1,-2d S0d<S1,2e S0e>S1,-2c+S0c+<S1,2dS0d S1,-2bS0b S1,2c+S0c+ S1,-2a S0a  _1:
+H	 <S1,1f+    >S1,-1d    <S1,1e    >S1,-1c+    <S1,1d    S1,-1b    S1,1c+     S1,-1a      _1:
+G	 <S1,2b S0b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2c+S0c+ S1,-2a S0a
+H	 <S1,1b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1c+     S1,-1a
+G	  S1,2d S0d  S1,-2f+S0f+S1,2c+S0c+S1,-2e S0e <S1,2bS0b>S1,-2dS0d<S1,2f+S0f+>S1,-2c+S0c+ _0]2 _3
+H	  S1,1d      S1,-1f+    S1,1c+    S1,-1e     <S1,1b   >S1,-1d   <S1,1f+    >S1,-1c+     _0]2 _3
+G	 <S1,2b S0b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2c+S0c+ S1,-2a S0a
+H	 <S1,1b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1c+     S1,-1a
+G	  S1,2d S0d  S1,-2f+S0f+S1,2c+S0c+S1,-2e S0e <S1,2bS0b>S1,-2dS0d<S1,2f+S0f+>S1,-2c+S0c+ _0
+H	  S1,1d      S1,-1f+    S1,1c+    S1,-1e     <S1,1b   >S1,-1d   <S1,1f+    >S1,-1c+S0   _0
+GH	r1l^4 Q8
+
+K	R0 R1 [R3[R2]3]7 R3R2R4 R1
+
+;;; PART 2 THEME
+
+A	V118 [!riff _-2 !riff _0 !riff:_-3 !riff _2]2 _2 !riff _0
+
+B	@101 o3 V121 D2
+G	v16 o5 E2,-1,24,1
+B	l4 [c+2<g+2.>c+d+e%21 ( f32 ) f+2c+2.f+g+bf+2.ed+e8d+<:bg+1&16. ( b32 ) >c1]2 <b%21> ( c32 ) c+1&1&8
+G	l4 [c+2<g+2.>c+d+e%21v15f32v16f+2c+2.f+g+bf+2.ed+e8d+<:bg+1&16.v15b32v16>c1]2 <b%21>v15c32v16c+1&1&8
+
+C	@23 o4 V113 D0 _0 MWA0 MA12,1,4,2 *1
+H	v13 o4 E1,0,0,0
+C	l1 [g+l^2a2>c+1.<bl^2:g+>c]2 c+l^2 *0
+H	l1 [g+l^2al^2bl^2:d+g+]2 f+e
+
+DE	@43 V118 D2 l1 o3
+D	c+l^2el^2<bl^2g+>c
+E	_0 g+l^2al^2f+l^2d+g+
+DE	@27 V113
+D	c+l^2el^2f+l^2c+l^2
+E	g+l^2al^2bl^2g+l^2
+
+K	R5 R6
+
+;;; PART 3 BRIDGE
+
+DE	@43 V115 D0
+ADE	|E _7 | o3 l1 c+<bal^2f+ba+l^2
+
+BC	@99 V123 o6 MWA0 MA24,1,4,2 *1
+B	l8 D0 e1d+2f+4b4>c+1.rc+c+d+e2<f+>e4d+4.c+<bf+d+<b4>c+1&1 *0
+C	l2 (c+1<br>e1.rg+r8g+4f+4.r.<a+1f1 *0
+
+GH	E1,0,0,0 Q2
+G	o4 v14 l16 _2
+H	o5 v13 l8 _2
+G	[    b   b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2e S0e>S1,-2c+S0c+
+H	[    b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1e    >S1,-1c+
+G	<S1,2f+S0f+>S1,-2d S0d<S1,2e S0e>S1,-2c+S0c+<S1,2dS0d S1,-2bS0b S1,2c+S0c+S1,-2a S0a]3 _-1<
+H	<S1,1f+    >S1,-1d    <S1,1e    >S1,-1c+    <S1,1d    S1,-1b    S1,1c+    S1,-1a    ]3 _-1<
+G	     b   b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2dS0d S1,-2aS0a S1,2e S0e>S1,-2c+S0c+
+H	     b     >S1,-1f+    S1,1e     S1,-1f+     S1,1d    S1,-1a    S1,1e    >S1,-1c+
+G	<S1,2f+S0f+>S1,-2d S0d<S1,2e S0e>S1,-2c+S0c+<S1,2dS0d S1,-2bS0b S1,2c+S0c+S1,-2a S0a
+H	<S1,1f+    >S1,-1d    <S1,1e    >S1,-1c+    <S1,1d    S1,-1b    S1,1c+    S1,-1a
+
+K	R7
+
+;;; PART 4 ASCENT
+
+AC	@27 q2 V113 o2
+A	_2 [!riff]4 _0
+C	_2 q4 D2 l8 [b2bb4.b4b4bb4.]4 _7 D0
+
+BDE	@99 o5 V119 D0 l8
+B	) _2  !riff _5  !riff _9 !riff _2 >br4.bbrb4rbr q4 bbb4 _0 q0
+D	  _-3 !riff _2  !riff _5 !riff _-3>br4.bbrb4rbr q4 bbb4 _0 q0
+E	  _-7 !riff _-3 !riff _2 !riff _-7>br4.bbrb4rbr q4 bbb4 _0 q0
+
+GH	E2,-2,4,1 Q8 l16 S0 _0 <)
+GH	[c+f+g+b>c+f+g+b>c+<bf+g+e<bef+]8<
+
+K	R8 R12
+
+;;; PART 5 CLOCKWERKS
+
+AC	@166 o1 q0 l1
+A	V115 [a+l^2f+l^2g+l^2:fa]2a+l^2
+A	@27 q2 V118 l8 o2 D4
+A	[_-1 !riff _-5 !riff _-3 !riff _0 :fr4.ffr4araraar4]2 >fr4.ffr4frfrffr4
+C	V110 [[a+l^2f+l^2g+l^2:fa]2a+l^2:V115_0]2
+
+D	@250 o5 V113 D2
+E	@250 o4 V107 D2
+D	[[[[d+rd+r:c+4rd+.r16d+.r16d+16r16c+4..r16]2:c+4rd+.r16d+.r16f16r16c+4..r16]2:c+d+4d+.r16d+.r16a16r16f4..r16]2 c+4rc.r16c.r16c+16r16c+4..r16V115]2
+E	[[[a+ra+ra+4ra+.r16a+.r16a+16r16a+4..r16]2 g+rg+rg+4rg+.r16g+.r16g+16r16g+4..r16:g+rg+rg+g+4a.r16a.r16>d+16r16c4..r16]2 <a+ra+ra+4ra+.r16a+.r16a+16r16a+4..r16V110]2
+
+B	@23 o4 V110 l4 MWA0 MA12,1,4,2 *1
+B	[[a+2f2ra+>cc+d+2<a+2r>d+fg+d+2.c+cc+8c<g+.:f1...r8]2 a+1...r8:V115]2 *0
+
+GH	[[[a+>d+fg+a+>d+fg+a+g+d+fc+<g+c+d+]2<[f+a+>c+f+a+>c+ff+d+f+fc+<a+f+cc+]2<
+GH	[g+>cd+cg+>cd+g+d+g+cd+<g+>c<g+d+]2:<fa+>cd+fa+>cd+fd+<a+>c<g+d+<g+a+a>cfaca>fa>c<ad+fc+<ac+d+]2<[a+>d+fg+a+>d+fg+a+g+d+fc+<g+c+d+]2]2
+
+K	R9 R10
+
+;;; PART 6 ASCENT II
+
+AC	@27 q2 o2
+A	V113 _6 D0 [!riff]4 _0
+C	V117 _-1 q4 D2 l8 [b2bb4.b4b4bb4.]4 _0 q0
+	
+BE	@99 o5 V121 D0 l8
+B	) _-1 !riff    !riff    !riff _0 >a+r4.a+a+ra+4ra+r q4 a+a+a+4 q0
+D	)[d+rd+rc+16r16c+4r]8
+E	  _-6 !riff _2 !riff _6 !riff _0 >fr4.ffrf4rfr q4 fff4 q0
+
+GH	_-3[c+f+g+b>c+f+g+b>c+<bf+g+e<bef+]8 _0
+
+K	R8 R11
+
+;;; PART 7 THEME II
+
+A	V118 [!riff _-4 !riff _-2 !riff:_-5 !riff _0]2 _0 !riff
+A	q4 [[b2bb4.b4b4bb4.g2gg4.g4g4gg4.a2aa4.a4a4aa4.:f+2f+f+4.f+4f+4f+f+4.]2:b2bb4.b4b4bb4.]2
+
+B	@23 o3 V127 l4 MWA0 MA12,1,4,2 *1
+B	[[b2f+2rb>c+d%21(d+32)e2<b2r>ef+ae2&8r16.:r32dc+d8c+<af+1r%9(a32)a+2..r8]2 >>(c+32)dc+d8c+<a%21(a+32):b1&1r8]2 b1&8>d1
+
+C	@43 o4 V120 l4
+C	[[d2d2rdef+g2d2rc+de:a2..r8e2..r8c+2..r8c+2..r8]2 a2&8r8dc+d8c+<ab1&1r8]2
+
+DE	@47 V115 D0 l1 o4
+D	<bl^2>dl^2<al^2f+a+bl^2>dl^2e
+E	f+l^2gl^2el^2c+f+f+l^2gl^2a<
+D	@23 V120 e2..e&8d
+E	@27 a2..b&8b l4>
+D	[@27 V115 l4<
+D	[[b]8>[d]8<[a]8: a+a+a+a+>c+c+c+c+]2
+D	@23 V120:e1d1]2
+E	[[[f+]8[g]8[e]8: f+f+f+f+a+a+a+a+]2:[f+]8]2
+
+GH	E1,0,0,0 Q2
+G	o4 v13 l16
+H	o5 v12 l8
+G	[[   b   b >S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,2 d S0d S1,-2a S0a S1,2e S0e>S1,-2c+S0c+
+H	[[   b     >S1,-1f+    S1,1e     S1,-1f+     S1,1 d     S1,-1a     S1,1e    >S1,-1c+
+G	<S1,2f+S0f+>S1,-2d S0d<S1,2e S0e>S1,-2c+S0c+<S1,2 d S0d S1,-2b S0b S1,2c+S0c+S1,-2a S0a]3:<
+H	<S1,1f+    >S1,-1d    <S1,1e    >S1,-1c+    <S1,1 d     S1,-1b     S1,1c+    S1,-1a    ]3:<
+G	     a+  a+>S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,-2a S0a S1,2 f+S0f+S1,2e S0e S1,-2f+S0f+
+H	     a+    >S1,-1f+    S1,1e     S1,-1f+     S1,-1a     S1,1 f+    S1,1e     S1,-1f+
+G	<S1,2a+S0a+>S1,-2f+S0f+S1,2e S0e S1,-2f+S0f+ S1,-2a+S0a+S1,2 f+S0f+S1,2e S0e S1,-2f+S0f+]2
+H	<S1,1a+    >S1,-1f+    S1,1e     S1,-1f+     S1,-1a+    S1,1 f+    S1,1e     S1,-1f+    ]2
+GH	E2,-2,4,1 Q8 l16 S0 _-2 <))
+GH	[c+f+g+b>c+f+g+b>c+<bf+g+e<bef+]2< _1
+GH	[[[a+>d+fg+a+>d+fg+a+g+d+fc+<g+c+d+]2<[f+a+>c+f+a+>c+ff+d+f+fc+<a+f+cc+]2<
+GH	[g+>cd+cg+>cd+g+d+g+cd+<g+>c<g+d+]2:<fa+>cd+fa+>cd+fd+<a+>c<g+d+<g+a+a>cfaca>fa>c<ad+fc+<ac+d+]2<[a+>d+fg+a+>d+fg+a+g+d+fc+<g+c+d+]2]2
+
+K	[R13]2 [R3[R2]11:R2R2R4]2 R14
+
+;;; PART 8 CLOCKWERKS II
+
+A	l4 bbb.bbb8b2 q0
+
+B	@23 o5 V127 l8 _1 Q7
+C	@23 o4 V120 l8 _1 Q7 MWA0 MA12,1,4,2 *1
+B	[[[d+rd+r:c+4rd+.r16d+.r16d+16r16c+4..r16]2:c+4rd+.r16d+.r16f16r16c+4..r16]2:c+d+4d+.r16d+.r16a16r16f4..r16]2 c+4rc.r16c.r16c+16r16
+C	[[a+ra+ra+4ra+.r16a+.r16a+16r16a+4..r16]2 g+rg+rg+4rg+.r16g+.r16g+16r16g+4..r16:g+rg+rg+g+4a.r16a.r16>d+16r16c4..r16]2 <a+ra+ra+4ra+.r16a+.r16a+16r16
+
+D	l8 Q7 V127 MWA0 MA12,1,4,2 *1 >brbrb4rb.r16b.r16b16r16
+E	V120 eed.c+c+d8d2
+
+K	[R3[R2]11:R2R2R2R15]2 R16
+
+;;; PART 9 OUTRO
+
+B	Q8 c+8l^19r8 r1r1 _0 *0
+C	a+4..r16 *0
+AC	@27 q2 V113 l8 o2 |C Q8 _0 |
+AC	[!riff]2
+
+D	Q8 b8l^19r8 *0
+D	@27 V113 D2 <<f+1&1
+E	V113 D2 <b1&1b1&1
+
+GH	r1l^4 _0
+
+K	R17
+
+;;; RHYTHM
+
+R0	l16 \V58 [@257c@128ccc@256c@128ccc @257c@128c@129c@128c@256c@128ccc @257c@128ccc@257c@128ccc @257c@128c@129c@128c:@256c@128ccc]2 @258c@128c@256c@128c
+R1	l16 \V58 [@515c8@128cc@256c@128ccc @259c@128c@131c@128c@256c@128ccc @259c@128ccc@259c@128ccc @259c@128c@131c@128c:@256c@128c@131c@128c]2 @192cccc
+R2	l16 \V58 @129c@128c@130c@128c@129cc@130c@128c
+R3	l16 \V58 @513c8@130c@128c@129cc@130c@128c
+R4	l16 \V58 @129c@128c@130c@128c@129cc@192ccccc@128c@192c@128c@192c@128c
+R5	l16 \V58 @515c8[@128cc@256c@128ccc @259c@128c@131c@128c@256c@128ccc @259c@128ccc@259c@128ccc @259c@128c@131c@128c:@256c@128c@131c@128c @259c@128c]4 @192cccc
+R6	l8 \V58 @513c[@128c@130c@128c@129c:@129c@130c@128c @129c]8 @192cc16c16c16c16
+R7	l16 \V58 [@257c@128ccc@256c@128ccc @257c@128c@129c@128c:@256c@128ccc]4 @258c@128c@256c@128c @515c8@128cc@256c@128ccc @259c@128c@131c@128c@256c@128ccc @259c@128ccc@259c@128ccc @259c@128c@131c@128c@256c@128c@131c@128c @514c@131cc@128c@514c@131cc@128c @131c@128c@131c@128c@192cccc @131c@128ccc@131c@128ccc @131c@128c@131c@128c@132cccc
+R8	l16 \V58 [@513c8@128cc@256c@128ccc @257c@128c@129c@128c@256c@128ccc @257c@128ccc@257c@128ccc @257c@128c@129c@128c@256c@128c@192c@128c]2
+R9	l8 \V58 [@512c@128c[@256c@128c]7 [[@256c@128c]4:[@256c@128c]3 @256c@128c16c16]3:@256c@128c@256c@128c@128c@256c@128c@256c]2 @128[c16]16
+R10	l16 \V58 @512c8@128cc[@256c@128ccc]31 @513c8@128cc[@257c@128ccc]28 @258c@128ccc @192cccc @132cccc
+R11	l16 \V58 [@513c@129cc@128c@256c@128ccc @257c@128c@129c@128c@256c@128ccc @257c@128ccc@257c@128ccc:@257c@128c@129c@128c@192ccc@128c]2 @259c@128c@259c@128c@192cccc
+R12	l16 \V58 [@513c8@128cc@256c@128ccc @257c@128c@129c@128c@256c@128ccc @257c@128ccc@257c@128ccc @257c@128c@129c@128c:@256c@128c@192c@128c]2@192cccc
+R13	l8 \V58 @513c[@128c@130c@128c:@129cc@130c@128c @129c]8 @192cc16c16cc
+R14	l16 \V58 @192c@128c@256c@128c@192c@128c@256c@128c @192c@128c@192c@128c@129c@128c@132cc ccc@128c@129c@128c@192ccccc@128c@192c@128c@192c@128c
+R15	l16 \V58 @192cccc@196cccc
+R16	l8 \V58 @258c@256c@258c@256c @258c@258c@256c@258c @256c l16 @257c@192c@257c@128c@192ccccc@128c@192c@128c@192c@128c
+R17	l16 \V58 @257c@128ccc@256c@128ccc @257c@128c@129c@128c@256c@128ccc @257c@128ccc@257c@128ccc @257c@128c@129c@128c@256c@128ccc @515c@259cc@128c@515c@128ccc @515c@128c@259c@128c@256c@128ccc @193c@128ccc@193c@192cc@128c @577c8@193c@128c@576c8@192c@128c

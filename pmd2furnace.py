@@ -699,75 +699,99 @@ class FurnaceBuilder:
         """Create an SSG instrument with volume macro for software envelope
         
         PMD E command: E <al>, <dd>, <sr>, <rr>
-        - AL = Attack Length (ticks to wait at initial volume)
-        - DD = Decay Depth (signed, volume change after attack)
-        - SR = Sustain Rate (ticks between each -1 volume decrease)
-        - RR = Release Rate (ticks between each -1 after note off)
         
-        We simulate this with a volume macro sequence.
+        Volume sequence from docs: V'al  V-dd'sr  V-dd-1'sr  V-dd-2'sr ... / R'rr R-1'rr ...
+        
+        - AL = Attack Length: hold at max volume for AL ticks
+        - DD = Decay Depth: initial volume drop after attack (signed, -15 to 15)
+        - SR = Sustain Rate: ticks between each -1 volume step during decay
+        - RR = Release Rate: ticks between each -1 after note release
+        
+        Furnace macro release point (/): when note is released, macro jumps here.
+        We build: [attack + decay portion] / [release portion with RR timing]
         """
-        # Build volume macro sequence
-        # Start at max volume (15 for SSG), decay down
+        max_vol = 15
         vol_sequence = []
         
-        # PMD's SR = number of internal clocks between volume decrements
-        # PMD internal clock rate depends on tempo: tempo * 48 / 60 Hz
-        # Furnace macro speed is in engine ticks (typically 60 Hz)
-        # 
-        # For EX0 (tempo-dependent), at tempo 120:
-        #   PMD internal clock = 120 * 48 / 60 = 96 Hz
-        #   SR=24 means 24/96 = 0.25s per step
-        #   To get 0.25s in Furnace at 60 Hz: speed = 60 * 0.25 = 15
-        #
-        # Simplification: speed = SR * 60 / (tempo * 48 / 60) = SR * 3600 / (tempo * 48)
-        # At tempo 120: speed = SR * 3600 / 5760 = SR * 0.625
-        # At tempo 150: speed = SR * 3600 / 7200 = SR * 0.5
-        #
-        # For now, use a simpler approximation - divide SR by ~4
-        # This gives reasonable decay times for typical tempos
+        # === ATTACK PHASE ===
+        # Hold at max volume for AL ticks
+        attack_steps = max(1, al) if al > 0 else 1
+        for _ in range(attack_steps):
+            vol_sequence.append(max_vol)
         
-        max_vol = 15
-        speed = max(1, min(255, sr // 6)) if sr > 0 else 1
+        # === DECAY PHASE ===
+        # After attack, volume drops by DD then decreases by 1 every SR ticks
+        # DD is signed: positive = decay down, negative = swell up
+        current_vol = max_vol - dd
+        current_vol = max(0, min(15, current_vol))
         
-        # Create decay sequence
-        if dd < 0:
-            # Decay down
-            for v in range(max_vol, -1, -1):
-                vol_sequence.append(v)
-        elif dd > 0:
-            # Decay up (unusual but possible)
-            for v in range(0, max_vol + 1):
-                vol_sequence.append(v)
-        else:
-            # No decay, just hold
-            vol_sequence = [max_vol]
+        decay_speed = max(1, sr) if sr > 0 else 1
+        
+        # Decay down to 0 (or sustain level - PMD sustains at 0 for this envelope type)
+        while current_vol > 0 and len(vol_sequence) < 60:
+            # Hold this volume for SR ticks
+            for _ in range(decay_speed):
+                vol_sequence.append(current_vol)
+                if len(vol_sequence) >= 60:
+                    break
+            current_vol -= 1
+        
+        # Add sustain at 0 (or loop point for sustained notes)
+        # For sustained notes, we want to hold at the end of decay
+        # Add a few 0s as sustain floor
+        sustain_vol = 0
+        for _ in range(4):
+            vol_sequence.append(sustain_vol)
+        
+        # Mark where release portion starts
+        release_point = len(vol_sequence)
+        
+        # === RELEASE PHASE ===
+        # When note is released, decay from current volume (we'll start from max and let it play)
+        # Actually, release should continue from wherever the decay left off
+        # But Furnace jumps TO the release point, so we need a full decay sequence here
+        release_speed = max(1, rr) if rr > 0 else 1
+        
+        # Release: decay from max volume down to 0 at RR rate
+        # This handles the case where note is released during attack
+        for vol in range(max_vol, -1, -1):
+            for _ in range(release_speed):
+                vol_sequence.append(vol)
+                if len(vol_sequence) >= 127:
+                    break
+            if len(vol_sequence) >= 127:
+                break
+        
+        # Ensure we end at 0
+        if vol_sequence[-1] != 0:
+            vol_sequence.append(0)
         
         # Limit sequence length
         if len(vol_sequence) > 127:
             vol_sequence = vol_sequence[:127]
+            release_point = min(release_point, 126)
         
-        # Build volume macro - format from Furnace instrument.cpp writeMacro():
+        # Build volume macro
+        # Format from Furnace instrument.cpp writeMacro():
         #   1 byte: macroType & 31 (0 = volume)
         #   1 byte: len
         #   1 byte: loop (255 = no loop)
-        #   1 byte: rel (255 = no release)
+        #   1 byte: rel (release point index, 255 = no release)
         #   1 byte: mode (0 = sequence)
         #   1 byte: (open & 0x3f) | wordSize  
-        #           wordSize: 0=8bit unsigned, 64=8bit signed, 128=16bit, 192=32bit
-        #           open: bit 0 = open in editor
         #   1 byte: delay
-        #   1 byte: speed
+        #   1 byte: speed (1 = every tick)
         #   N bytes: data
         
         macro_vol = bytes([
             0,  # macroType: 0 = volume
             len(vol_sequence),  # length
-            255,  # loop (255 = no loop)
-            255,  # release (255 = no release)
+            255,  # loop (255 = no loop) 
+            release_point,  # release point - macro jumps here on note release
             0,  # mode (0 = sequence)
             0x01,  # open=1, wordSize=0 (8-bit unsigned)
             0,  # delay
-            speed,  # speed (ticks per step)
+            1,  # speed = 1 tick per step
         ]) + bytes(vol_sequence)
         
         # MA feature format from Furnace writeFeatureMA():

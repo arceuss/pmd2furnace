@@ -1,0 +1,92 @@
+#Title          ‘•üí@` Decoration Battle
+#Composer       ‚y‚t‚mi‘¾“cj
+#Arranger       ‚y‚t‚mi‘¾“cj
+#Memo           “Œ•ûŒ¶‘z‹½—p‚Ì‹È
+#Memo           ƒ{ƒX—p‚Ì‹È
+#Option         /v/c
+#Filename       T_Th04_04.M
+
+;INS ALG  FB 
+@001 002 006
+;AR  DR  SR  RR  SL  TL  KS  ML DT1 AMS
+030 014 004 004 002 030 002 000 004 000
+024 010 004 004 002 050 003 002 003 000
+028 004 004 004 002 025 003 000 004 000
+028 007 004 006 002 000 003 000 003 001
+
+;INS ALG  FB 
+@027 003 006
+;AR  DR  SR  RR  SL  TL  KS  ML DT1 AMS
+024 008 001 008 001 013 000 006 003 000
+026 008 003 008 003 030 000 002 007 000
+026 008 003 008 003 028 000 001 007 000
+026 000 000 009 000 000 000 002 003 000
+
+;INS ALG  FB 
+@054 004 004
+;AR  DR  SR  RR  SL  TL  KS  ML DT1 AMS
+031 000 000 000 000 017 000 008 007 000
+031 016 000 008 002 000 000 004 007 001
+031 000 000 000 000 020 000 004 003 000
+031 016 000 008 002 000 000 002 003 001
+
+;INS ALG  FB 
+@071 004 007
+;AR  DR  SR  RR  SL  TL  KS  ML DT1 AMS
+031 011 006 008 006 000 000 015 000 000
+031 011 006 015 006 000 000 000 000 000
+000 000 000 000 000 000 000 000 000 000
+000 000 000 000 000 000 000 000 000 000
+
+;INS ALG  FB 
+@099 005 007
+;AR  DR  SR  RR  SL  TL  KS  ML DT1 AMS
+031 000 000 000 000 029 000 001 000 000
+031 014 003 015 003 000 000 001 000 000
+031 014 003 015 003 000 000 001 000 000
+031 014 003 015 003 000 000 001 000 000
+
+;INS ALG  FB 
+@198 005 007
+;AR  DR  SR  RR  SL  TL  KS  ML DT1 AMS
+018 000 000 005 000 034 000 004 007 000
+024 010 004 006 001 000 000 002 007 000
+024 010 004 006 001 000 000 004 003 000
+024 010 004 006 001 000 000 002 007 000
+
+A	MXA1MXB1_M-3_2t75@27V119o4g2.r16g8.g+2.r16g+8.a+2.r16a+8.a+2.r16a+8.r){co2a+}L_2t77@99V127rl8o5f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c_-1@99V127r4<f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c_1@99V127r4<f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c_3@99V127r4<f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c
+
+B	MXA1MXB1_M-3_2t75@27V119o4c2.c8>c8<c+2.c+8>c+8<d+2.d+8>d+8t-5<e2.t-5e8t+8>e8t+2r{<e<e}r8.L_2t77@99V127((D-4rl8o5f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c_-1@99V127((D-4r4<f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c_1@99V127((D-4r4<f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c_3@99V127((D-4r4<f>c<a+g+gg+c%60cd+gf%60gg+a+>c.e.>c<a+g+gg+>c<fgg16g+16gfd+c>c<fgg+16a+16g+gfc>c<fgg16g+16gfd+cec<a+g+gfe4fgg+>c<fgg+>c<d+fg>c<d+fg>c<fgg+>c<fgg+>c<efg>c<efg>cfgg+cfgg+cgd+<a+>gd+<a+g+gg+a+>c<fg+a+>cfec<a+>c<g+>c<g>c
+
+C	MXA1MXB1_M-3_2t75@1V119[l16o5cfgg+a+>cfgfc>c<gfc<g+g]3cegg+a+>cegec>c<gec<ger4V125@71o1c4L_2t77@198V111[o3fgg+>cfgg+>cfgg+>c<g+gfco3d+fg>cd+fg>cd+fg>c<gf<a+g<fgg+>cfgg+>cfgg+>c<g+gfco3efg>cefg>cefg>c<gfec[<g+a+>c<f]4[g+a+>c:<f]3>fc<a+g+g[fgg+c]4gecgecgecgecgec<g]2_-1@198V111[fgg+>cfgg+>cfgg+>c<g+gfco3d+fg>cd+fg>cd+fg>c<gf<a+g<fgg+>cfgg+>cfgg+>c<g+gfco3efg>cefg>cefg>c<gfec[<g+a+>c<f]4[g+a+>c:<f]3>fc<a+g+g[fgg+c]4gecgecgecgecgec<g]2_1@198V111[fgg+>cfgg+>cfgg+>c<g+gfco3d+fg>cd+fg>cd+fg>c<gf<a+g<fgg+>cfgg+>cfgg+>c<g+gfco3efg>cefg>cefg>c<gfec[<g+a+>c<f]4[g+a+>c:<f]3>fc<a+g+g[fgg+c]4gecgecgecgecgec<g]2_3@198V111[fgg+>cfgg+>cfgg+>c<g+gfco3d+fg>cd+fg>cd+fg>c<gf<a+g<fgg+>cfgg+>cfgg+>c<g+gfco3efg>cefg>cefg>c<gfec[<g+a+>c<f]4[g+a+>c:<f]3>fc<a+g+g[fgg+c]4gecgecgecgecgec<g]2
+
+D	MXA1MXB1_M-3_2t75@54V117o4g2.r16g8.g+2.r16g+8.a+2.r16a+8.a+2.r16a+8.r2L_2t77@27V114[l1c<a+g+g>c<a+g+>e]2_-1@27V114[c<a+g+g>c<a+g+>e]2_1@27V114[c<a+g+g>c<a+g+>e]2_3@27V114[c<a+g+g>c<a+g+>e]2
+
+E	MXA1MXB1_M-3_2t75@54V117o5c2.c8>c8<c+2.c+8>c+8<d+2.d+8>d+8<e2.e8>e8r2L_2t77@27V114[o3f1d+1c+1c2e2l1>fd+fc]2_-1@27V114[<fd+c+c2e2>fd+fc]2_1@27V114[<fd+c+c2e2>fd+fc]2_3@27V114[<fd+c+c2e2>fd+fc]2
+
+F	MXA1MXB1_M-3
+
+G	t70DF28DS24DR24MXA1MXB1_M-3_2t75E1,2,24,1V12[l16o5cfgg+a+>cfgfc>c<gfc<g+g]3cegg+a+>cegec>c<gec<ger2L_2t77E2,1,0,1V14[l1<c<a+g+g>c<a+g+>e]2_-1E2,1,0,1V14[c<a+g+g>c<a+g+>e]2_1E2,1,0,1V14[c<a+g+g>c<a+g+>e]2_3E2,1,0,1V14[c<a+g+g>c<a+g+>e]2
+
+H	MXA1MXB1_M-3_2t75E1,2,24,1V12[l16o4cfgg+a+>cfgfc>c<gfc<g+g]3cegg+a+>cegec>c<gec<ger2L_2t77E2,1,0,1V14[<f1d+1c+1c2e2l1>fd+fc]2_-1E2,1,0,1V14[<fd+c+c2e2>fd+fc]2_1E2,1,0,1V14[<fd+c+c2e2>fd+fc]2_3E2,1,0,1V14[<fd+c+c2e2>fd+fc]2
+
+I	MXA1MXB1_M-3
+
+J	MXA1MXB1_M-3
+
+K	R0R0R0R1R13LR5R3R2R3[R5]3R4[R2R3]2[R5]3R4[R6]4[R7]3R8[R9:R10]4R11[[R2R3]2[R5]3R4]2[R12]8[R12]6R0R1
+
+R0	\V60l16@128cccccccccccc@130c@128ccc
+R1	\V60[l16@578c@128ccc]2@66cccc@194cc@129cc
+R2	\V63[l16@129c@128c@130c:@128c]4@130c
+R3	\V63[l16@129c@128c@130c@128c]3@129c@130cc@129c
+R4	\V63[l16@129c@128c@130c@128c]2@514c@128ccc@64cccc
+R5	\V63@578c8l16@130c@128c[@129c@128c@130c:@128c]3@130c
+R6	\V60@256c2c2
+R7	\V63l4@129cccc
+R8	\V63@129c4c8l16@1cc@194cccccc@129cc
+R9	\V63[@129c8:@130c8]4c16c16
+R10	\V63[@129c8@130c8]3l16@129c@130cc@129c
+R11	\V63[@129c8@130c8]2l16@514c@128ccc@66cccc
+R12	r1
+R13	r4\V63@578c4
