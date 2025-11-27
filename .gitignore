@@ -23,7 +23,11 @@ __pycache__/
 *.bin
 *_patterns/
 
-# Keep these
-!README.md
-!convert_th4.bat
+# MML source files (can be regenerated)
+*.mml
+*.MML
+
+# Other assets
+*.htm
+aquatic.fur
 

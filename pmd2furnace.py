@@ -720,21 +720,27 @@ class FurnaceBuilder:
             vol_sequence.append(max_vol)
         
         # === DECAY PHASE ===
-        # After attack, volume drops by DD then decreases by 1 every SR ticks
-        # DD is signed: positive = decay down, negative = swell up
-        current_vol = max_vol - dd
+        # After attack, DD is ADDED to volume, then volume decreases by 1 every SR ticks
+        # DD is signed: negative = decay down, positive = swell up
+        # Example: E1,-2,2,1 v13 → 13 + (-2) = 11
+        current_vol = max_vol + dd  # DD is added (negative DD = decrease)
         current_vol = max(0, min(15, current_vol))
         
-        decay_speed = max(1, sr) if sr > 0 else 1
-        
-        # Decay down to 0 (or sustain level - PMD sustains at 0 for this envelope type)
-        while current_vol > 0 and len(vol_sequence) < 60:
-            # Hold this volume for SR ticks
-            for _ in range(decay_speed):
+        # SR=0 means NO decay (sustain at current level forever)
+        if sr == 0:
+            # Sustain at current volume until release
+            for _ in range(30):  # Hold for a while
                 vol_sequence.append(current_vol)
-                if len(vol_sequence) >= 60:
-                    break
-            current_vol -= 1
+        else:
+            # Decay down to 0: decrease by 1 every SR ticks
+            decay_speed = sr
+            while current_vol > 0 and len(vol_sequence) < 60:
+                # Hold this volume for SR ticks
+                for _ in range(decay_speed):
+                    vol_sequence.append(current_vol)
+                    if len(vol_sequence) >= 60:
+                        break
+                current_vol -= 1
         
         # Add sustain at 0 (or loop point for sustained notes)
         # For sustained notes, we want to hold at the end of decay
@@ -747,20 +753,22 @@ class FurnaceBuilder:
         release_point = len(vol_sequence)
         
         # === RELEASE PHASE ===
-        # When note is released, decay from current volume (we'll start from max and let it play)
-        # Actually, release should continue from wherever the decay left off
-        # But Furnace jumps TO the release point, so we need a full decay sequence here
-        release_speed = max(1, rr) if rr > 0 else 1
+        # When note is released, decay from current volume down to 0
+        # Furnace jumps TO the release point, so we need a full decay sequence here
         
-        # Release: decay from max volume down to 0 at RR rate
-        # This handles the case where note is released during attack
-        for vol in range(max_vol, -1, -1):
-            for _ in range(release_speed):
-                vol_sequence.append(vol)
+        # RR=0 means instant drop to 0
+        if rr == 0:
+            vol_sequence.append(0)
+        else:
+            # Release: decay from max volume down to 0 at RR rate
+            # This handles the case where note is released during attack
+            for vol in range(max_vol, -1, -1):
+                for _ in range(rr):
+                    vol_sequence.append(vol)
+                    if len(vol_sequence) >= 127:
+                        break
                 if len(vol_sequence) >= 127:
                     break
-            if len(vol_sequence) >= 127:
-                break
         
         # Ensure we end at 0
         if vol_sequence[-1] != 0:
