@@ -1273,10 +1273,85 @@ class FurnaceBuilder:
                     self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
                 )
     
+    def _collect_tempo_changes(self):
+        """Pre-collect ALL tempo changes from all channels
+        
+        Tempo is GLOBAL in PMD, so we need to process tempo commands from all channels
+        in chronological order to track the current TPQ correctly.
+        
+        Virtual tempo uses FDxx (numerator) and FExx (denominator).
+        Effective tempo = base * (numerator / denominator)
+        We use initial TPQ as numerator and current TPQ as denominator.
+        """
+        # Collect all tempo events from all channels with their tick positions
+        all_tempo_events = []
+        
+        for ch in self.pmd.channels:
+            tick_pos = 0
+            for event in ch.events:
+                if isinstance(event, PMDCommand) and event.cmd == 0xFC and event.params:
+                    all_tempo_events.append((tick_pos, event.params))
+                elif isinstance(event, PMDNote):
+                    tick_pos += event.length
+        
+        if not all_tempo_events:
+            return
+        
+        # Sort by tick position
+        all_tempo_events.sort(key=lambda x: x[0])
+        
+        # Process in order with global tempo_48 tracking
+        # tempo_48 is PMD's friendly tempo value (higher = faster)
+        # Formula: tempo_48 = 0x112C / (256 - TimerB)
+        # Default TimerB=200 gives tempo_48 ≈ 78
+        current_tempo_48 = 78  # Default
+        initial_tempo_48 = None  # Will be set by first tempo command
+        
+        for tick_pos, params in all_tempo_events:
+            tempo_fx = []
+            
+            if len(params) >= 2 and params[0] == 0xFF:
+                # Set tempo_48 (t command) - higher value = faster
+                current_tempo_48 = params[1]
+                if initial_tempo_48 is None:
+                    initial_tempo_48 = current_tempo_48  # First setting becomes the base
+                # Virtual tempo: current/initial ratio
+                # Higher current = faster, so numerator = current, denominator = initial
+                tempo_fx.append((0xFD, current_tempo_48))
+                tempo_fx.append((0xFE, initial_tempo_48))
+            elif len(params) >= 2 and params[0] == 0xFD:
+                # Add to tempo_48 (t± command) - gradual tempo change
+                delta = params[1]
+                delta = delta if delta < 128 else delta - 256  # Signed
+                current_tempo_48 = max(18, min(255, current_tempo_48 + delta))
+                if initial_tempo_48 is None:
+                    initial_tempo_48 = 78  # Default (~200 Timer B)
+                tempo_fx.append((0xFD, current_tempo_48))
+                tempo_fx.append((0xFE, initial_tempo_48))
+            elif len(params) >= 2 and params[0] == 0xFE:
+                # Add to tempo - relative change (skip for now)
+                pass
+            elif len(params) == 1:
+                # Raw tempo value (half-note BPM)
+                raw_tempo = params[0]
+                tempo_fx.append((0xFD, raw_tempo))
+            
+            if tempo_fx:
+                # Check if we already have an entry at this tick
+                existing = next((i for i, (t, _) in enumerate(self.tempo_changes) if t == tick_pos), None)
+                if existing is not None:
+                    # Merge with existing entry
+                    self.tempo_changes[existing] = (tick_pos, tempo_fx)
+                else:
+                    self.tempo_changes.append((tick_pos, tempo_fx))
+        
+        # Sort final tempo changes by tick
+        self.tempo_changes.sort(key=lambda x: x[0])
+    
     def _tempo_to_adpcmb(self):
         """Output tempo changes on ADPCM-B channel (15)
         
-        Tempo changes collected during channel processing are output as
+        Tempo changes collected by _collect_tempo_changes are output as
         FDxx (numerator) and FExx (denominator) effects on channel 15.
         """
         if not self.tempo_changes:
@@ -2054,7 +2129,6 @@ class FurnaceBuilder:
         pending_effects = []   # Effects to apply to next note
         tie_active = False     # Track if tie (&) is active for portamento
         pitch_slide_active = False  # Track if we need to stop pitch slide
-        current_tpq = 75  # Current ticks per quarter (default)
         # Gate time: qdata = ticks before note end to keyoff (0 = full length, higher = more staccato)
         current_qdata = 0  # Direct q value (ticks to cut from end)
         current_qdatb = 0  # Q percentage value (0-8, where gate = length * Q / 8)
@@ -2243,37 +2317,7 @@ class FurnaceBuilder:
                         current_detune = detune_raw if detune_raw < 32768 else detune_raw - 65536
                     elif event.cmd == 0xEC and event.params:  # Pan p
                         current_pan = event.params[0]
-                    elif event.cmd == 0xFC and event.params:  # Tempo t
-                        # FC tt = set raw tempo (half-note BPM)
-                        # FC FF tt = set ticks per quarter
-                        # FC FE tt = add to tempo
-                        # FC FD tt = add to ticks per quarter
-                        # Store tempo changes to output on ADPCM-B channel later
-                        # Using Furnace virtual tempo: FDxx (numerator), FExx (denominator)
-                        tempo_fx = []
-                        if len(event.params) >= 2 and event.params[0] == 0xFF:
-                            # Set ticks per quarter - this affects tempo inversely
-                            # Higher TPQ = slower tempo
-                            current_tpq = event.params[1]
-                            # Use virtual tempo: ratio = 75/new_tpq
-                            tempo_fx.append((0xFD, 75))
-                            tempo_fx.append((0xFE, current_tpq))
-                        elif len(event.params) >= 2 and event.params[0] == 0xFD:
-                            # Add to ticks per quarter - gradual tempo change
-                            delta = event.params[1]
-                            delta = delta if delta < 128 else delta - 256  # Signed
-                            current_tpq = max(1, min(255, current_tpq + delta))
-                            tempo_fx.append((0xFD, 75))
-                            tempo_fx.append((0xFE, current_tpq))
-                        elif len(event.params) >= 2 and event.params[0] == 0xFE:
-                            # Add to tempo - relative change (skip for now)
-                            pass
-                        elif len(event.params) == 1:
-                            # Raw tempo value (half-note BPM)
-                            raw_tempo = event.params[0]
-                            tempo_fx.append((0xFD, raw_tempo))
-                        if tempo_fx:
-                            self.tempo_changes.append((tick_pos, tempo_fx))
+                    # Note: Tempo (0xFC) is now handled globally in _collect_tempo_changes
                     elif event.cmd == 0xF6:  # Loop point L
                         loop_point_tick = tick_pos
                     elif event.cmd == 0xF0 and len(event.params) >= 4:  # SSG Envelope E
@@ -2670,6 +2714,9 @@ class FurnaceBuilder:
             # 'SSG-I': 8,  # Reserved for SSG drums from K/R
             'ADPCM-J': 9
         }
+        
+        # Pre-collect ALL tempo changes from all channels (tempo is global)
+        self._collect_tempo_changes()
         
         # Convert each channel
         for ch in self.pmd.channels:

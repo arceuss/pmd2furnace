@@ -185,6 +185,92 @@ Sets percentage-based gate time (0-8 range).
 
 ---
 
+## PMD Tempo System
+
+**Source:** PMDWin/pmdwincore/pmdwincore.cpp `comt()`, `calc_tb_tempo()`, `calc_tempo_tb()`
+
+### Two Tempo Values
+
+PMD maintains two related tempo values:
+
+| Variable | Name | Range | Description |
+|----------|------|-------|-------------|
+| `tempo_d` | Timer B | 0-255 | Raw YM2608 Timer B register value |
+| `tempo_48` | Tempo | 18-255 | Human-friendly tempo value (higher = faster) |
+
+### Conversion Formulas
+
+```
+tempo_48 = 0x112C / (256 - tempo_d)    // Timer B → Tempo
+tempo_d  = 256 - (0x112C / tempo_48)   // Tempo → Timer B
+```
+
+Where `0x112C` = 4396 decimal.
+
+**Example calculations:**
+- Default `tempo_d = 200` → `tempo_48 = 4396 / 56 ≈ 78`
+- `tempo_d = 250` → `tempo_48 = 4396 / 6 ≈ 733` (very fast)
+- `tempo_d = 100` → `tempo_48 = 4396 / 156 ≈ 28` (very slow)
+
+### Tempo Commands (0xFC)
+
+| Format | MML | Effect | Function Called |
+|--------|-----|--------|-----------------|
+| `FC tt` (tt < 251) | `T<value>` | Set Timer B directly | `calc_tb_tempo()` |
+| `FC FF tt` | `t<value>` | Set tempo_48 directly | `calc_tempo_tb()` |
+| `FC FE tt` (signed) | `T±<value>` | Add to Timer B | `calc_tb_tempo()` |
+| `FC FD tt` (signed) | `t±<value>` | Add to tempo_48 | `calc_tempo_tb()` |
+
+**Important:** 
+- `T` commands work on raw Timer B (hardware-level)
+- `t` commands work on tempo_48 (user-friendly)
+- **Higher tempo_48 = FASTER playback** (more ticks per second)
+
+### Gradual Tempo Changes
+
+The `FC FD` command allows gradual tempo changes by adding/subtracting from tempo_48:
+
+```mml
+t72      ; Set tempo to 72 (FC FF 48)
+t+3      ; Add 3 → 75, slightly faster (FC FD 03)
+t-12     ; Subtract 12 → 63, slower (FC FD F4, where F4 = -12 signed)
+t-5      ; Subtract 5 → 58, even slower (FC FD FB, where FB = -5 signed)
+```
+
+### Furnace Virtual Tempo Mapping
+
+Furnace uses virtual tempo effects to scale playback speed:
+- `FDxx` = numerator
+- `FExx` = denominator  
+- Effective speed = base × (numerator / denominator)
+
+**Mapping strategy:**
+```
+FD = current tempo_48   (numerator - changes)
+FE = initial tempo_48   (denominator - constant baseline)
+```
+
+**Example sequence:**
+| Tick | Command | tempo_48 | Furnace FD/FE | Ratio |
+|------|---------|----------|---------------|-------|
+| 0 | `FC FF 72` | 72 | FD48 FE48 | 1.00 (base) |
+| 1896 | `FC FD +3` | 75 | FD4B FE48 | 1.04 (4% faster) |
+| 1920 | `FC FD -12` | 63 | FD3F FE48 | 0.88 (12% slower) |
+| 2088 | `FC FD -5` | 58 | FD3A FE48 | 0.81 (19% slower) |
+| 2208 | `FC FF 76` | 76 | FD4C FE48 | 1.06 (back to normal) |
+
+### Timer B Hardware Details
+
+The YM2608 Timer B generates interrupts at a rate determined by:
+```
+Timer B Frequency = 2MHz / (6 × 12 × (256 - tempo_d) × 16)
+                  = ~17.36Hz × (256 - tempo_d)⁻¹
+```
+
+At default tempo_d=200: ~310 Hz tick rate
+
+---
+
 ## LFO / Vibrato (M Command)
 
 **Source:** PMDMML_EN.MAN.htm §9.1
