@@ -2495,8 +2495,9 @@ class FurnaceBuilder:
                 pending_ins = None
                 pending_vol = None
                 last_row = row
-                # Track last content tick for loop jump placement
-                self.last_content_tick = max(self.last_content_tick, tick_pos)
+                # Track last content tick for loop jump placement (end of note, not start)
+                note_end_tick = tick_pos + (event.length if hasattr(event, 'length') else 0)
+                self.last_content_tick = max(self.last_content_tick, note_end_tick)
             
             elif event == 'SLIDE_EFFECT':
                 # Tied portamento - add just the slide effect without a note
