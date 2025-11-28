@@ -2866,7 +2866,8 @@ class FurnaceBuilder:
             pack_byte(0) * 31,
             pack_byte(0x40) * 32,  # chip volume
             pack_byte(0) * 32,     # chip panning
-            pack_long(0) * 32,     # chip flag pointers (placeholder - will be updated)
+            # Chip flags: for YM2608, bit 0-4 = clockSel (0=8MHz, 1=7.98MHz PC-98)
+            pack_long(1) + pack_long(0) * 31,  # First chip = 1 (7.98MHz), rest = 0
             pack_string(self.pmd.header.title or 'PMD Import'),
             pack_string(self.pmd.header.composer or ''),
             pack_float(440.0),
@@ -2955,16 +2956,6 @@ class FurnaceBuilder:
             pat_ptr[i] = pack_long(fileptr)
             fileptr += len(pat)
         
-        # Create FLAG block for chip 0 (YM2608 at PC-98 clock rate)
-        chip_flags = self._make_chip_flags(7987200)  # 7.987MHz for PC-98
-        
-        # Update chip flag pointer (first of 32) to point to FLAG block
-        # The flag pointers are at a fixed offset in the INFO block
-        # We'll update info[9] which contains the chip flag pointers
-        chip_flag_ptrs = bytearray(pack_long(0) * 32)
-        # First chip's flag pointer points to the FLAG block
-        chip_flag_ptr_location = fileptr
-        
         # Write INFO block
         file += b''.join(info + ins_ptr + pat_ptr + info_2)
         
@@ -2977,43 +2968,8 @@ class FurnaceBuilder:
         # Write patterns
         file += b''.join(all_patterns)
         
-        # Write FLAG block
-        flag_block_offset = len(file)
-        file += chip_flags
-        
-        # Now we need to patch the chip flag pointer in the INFO block
-        # The chip flag pointers are 32 longs (128 bytes) located after:
-        # - header bytes (various)
-        # - chip IDs (32 bytes)
-        # - chip volumes (32 bytes)
-        # - chip panning (32 bytes)
-        # Find the position and patch it
-        # INFO block starts after file header (34 bytes) + "INFO" + size (8 bytes)
-        info_start = 34 + 8
-        # Skip to chip flag pointers: after timebase(1) + speeds(2) + arp(1) + tps(4) + pattern_len(2) + 
-        # order_count(2) + highlights(2) + ins_count(2) + wave_count(2) + sample_count(2) + pattern_count(4) +
-        # chip_ids(32) + chip_vols(32) + chip_pans(32) = 1+2+1+4+2+2+2+2+2+2+4+32+32+32 = 120
-        chip_flags_offset = info_start + 120
-        # Patch the first 4 bytes (pointer to FLAG block for chip 0)
-        file[chip_flags_offset:chip_flags_offset+4] = pack_long(flag_block_offset)
-        
         # Return uncompressed (Furnace accepts both)
         return bytes(file)
-    
-    def _make_chip_flags(self, clock: int = 7987200) -> bytes:
-        """Create a FLAG block for chip configuration
-        
-        For YM2608 on PC-98: clock=7987200 (7.987MHz)
-        Default arcade: clock=8000000 (8MHz)
-        """
-        flags_str = f"clock={clock}\n"
-        data = [
-            b'FLAG',
-            pack_long(0),  # size placeholder
-            pack_string(flags_str),
-        ]
-        data[1] = pack_long(bl_length(data[2:]))
-        return b''.join(data)
     
     def _make_asset_dir(self, count: int) -> bytes:
         """Create an ADIR block"""
