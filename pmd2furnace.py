@@ -2205,24 +2205,11 @@ class FurnaceBuilder:
                 if current_qdatb > 0:
                     qdat += (event.length * current_qdatb) // 8
                 
-                # Calculate release timing for FCxx effect (FM channels only)
-                # qdat = ticks before note end to trigger keyoff
-                cut_tick_offset = None  # Tick offset within row for FCxx effect
-                
-                if not event.is_rest and channel.channel_type == 'fm' and qdat > 0 and qdat < event.length:
-                    # Calculate when cut happens relative to note start
-                    ticks_until_cut = event.length - qdat
-                    note_row = tick_pos // TICKS_PER_ROW
-                    cut_tick = tick_pos + ticks_until_cut
-                    cut_row = cut_tick // TICKS_PER_ROW
-                    cut_tick_in_row = cut_tick % TICKS_PER_ROW
-                    
-                    if cut_row == note_row:
-                        # Release is in the same row as note - use FCxx on the note
-                        cut_tick_offset = cut_tick_in_row
-                    else:
-                        # Cut is on a different row - add NOTE_OFF event with tick offset
-                        events_with_ticks.append((cut_tick, 'NOTE_OFF', 0, None, [], None, 0, cut_tick_in_row))
+                # Gate time for FM channels
+                # Note: We intentionally don't use FCxx (Note Release) for FM because it causes
+                # weird fade in/out artifacts when notes are close together. The FM envelope
+                # naturally handles note transitions better without forcing release phase.
+                cut_tick_offset = None  # Not used for FM anymore
                 
                 events_with_ticks.append((tick_pos, event, current_transpose + current_master, current_volume, note_effects, ssg_env_for_note, qdat, cut_tick_offset))
                 
