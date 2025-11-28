@@ -670,7 +670,10 @@ class FurnaceBuilder:
         return mask.to_bytes(masklen, 'little') + payload
     
     def _make_pattern(self, channel: int, index: int, data: bytes) -> bytes:
-        """Create a PATN block"""
+        """Create a PATN block
+        
+        Note: data should already include the 0xFF terminator
+        """
         pat = [
             b'PATN',
             pack_long(0),
@@ -678,7 +681,7 @@ class FurnaceBuilder:
             pack_byte(channel),
             pack_short(index),
             pack_string(''),
-            data + b'\xFF'
+            data  # Already has 0xFF terminator from callers
         ]
         pat[1] = pack_long(bl_length(pat[2:]))
         return b''.join(pat)
