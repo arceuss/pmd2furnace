@@ -165,6 +165,18 @@ Dotted notes are supported (e.g., 72 = dotted quarter)
 | K (0x42) | 8 | SSG |
 | L (0x10) | 9 | ADPCM-A (Rhythm) |
 
+## Furnace File Format Notes
+
+### Chip ID
+YM2608 (OPNA) uses file ID `0x8E` in Furnace .fur files (not the enum value 34).
+
+### Channel Layout
+YM2608 in Furnace has 16 channels:
+- Channels 0-5: FM (A-F)
+- Channels 6-8: SSG (I-K)
+- Channel 9: ADPCM-B
+- Channels 10-15: Rhythm Sound Source (RSS)
+
 ## Resources
 
 - [MDRV2 Documentation (English)](https://en.touhouwiki.net/wiki/User:Mami/Music_Dev/Mdrv2/Md2mml)

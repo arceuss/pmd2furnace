@@ -50,8 +50,9 @@ NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 PMD_NOTE_REST = 0x0F  # Rest
 
 # Furnace special note values
-FUR_NOTE_OFF = 180
-FUR_NOTE_REL = 181
+FUR_NOTE_OFF = 180      # OFF - note off (key off for FM, note cut otherwise)
+FUR_NOTE_RELEASE = 181  # === - note release (macro release + key off for FM)
+FUR_NOTE_REL = 182      # REL - macro release only (no key off for FM)
 
 
 # =============================================================================
@@ -347,8 +348,13 @@ class PMDParser:
         
         Based on pmd2mml's pmdReadSequenceFM function.
         Many commands have variable length depending on sub-commands.
+        
+        Rhythm channel (K) is special:
+        - 0x00-0x7F: R pattern index (single byte, no length!)
+        - 0x80+: commands like other channels
         """
         offset = start
+        is_rhythm = (channel.channel_type == 'rhythm')
         
         while offset < end:
             byte = self.data[offset]
@@ -356,6 +362,18 @@ class PMDParser:
             # Track end marker
             if byte == 0x80:
                 break
+            
+            # Rhythm channel special handling: 0x00-0x7F = R pattern index
+            if is_rhythm and byte < 0x80:
+                # Store R pattern index as a PMDNote with special encoding:
+                # We use octave and note to reconstruct the byte value later
+                # The R pattern's actual duration will be calculated when expanding
+                offset += 1
+                channel.events.append(PMDNote(
+                    note=byte & 0x0F, octave=(byte >> 4) & 0x07, 
+                    length=0, is_rest=False  # Length=0 means "use R pattern duration"
+                ))
+                continue
             
             # Note data: 0x00-0x7F (but not 0x0F, 0x1F, etc. which are rests)
             if byte < 0x80:
@@ -696,111 +714,126 @@ class FurnaceBuilder:
         return b''.join(ins_block)
     
     def _make_ssg_envelope_instrument(self, al: int, dd: int, sr: int, rr: int, name: str = '') -> bytes:
-        """Create an SSG instrument with volume macro for software envelope
+        """Create an SSG instrument with ADSR volume macro for software envelope
         
         PMD E command: E <al>, <dd>, <sr>, <rr>
         
-        Volume sequence from docs: V'al  V-dd'sr  V-dd-1'sr  V-dd-2'sr ... / R'rr R-1'rr ...
+        PMD predefined envelopes (from PMDDotNET mml_seg.cs psgenvdat):
+          @0: { 0, 0, 0, 0 }     - Standard (no envelope)
+          @1: { 2, 255, 0, 1 }   - Synth 1 (DD=255 is -1 signed)
+          @2: { 2, 254, 0, 1 }   - Synth 2 (DD=254 is -2 signed)
+          @3: { 2, 254, 0, 8 }   - Synth 3
+          @4: { 2, 255, 24, 1 }  - E.Piano 1
+          @5: { 2, 254, 24, 1 }  - E.Piano 2
+          @6: { 2, 254, 4, 1 }   - Glocken/Marimba
+          @7: { 2, 1, 0, 1 }     - Strings (DD=1 means +1, slight swell then sustain)
+          @8: { 1, 2, 0, 1 }     - Brass 1
+          @9: { 1, 2, 24, 1 }    - Brass 2
         
-        - AL = Attack Length: hold at max volume for AL ticks
-        - DD = Decay Depth: initial volume drop after attack (signed, -15 to 15)
-        - SR = Sustain Rate: ticks between each -1 volume step during decay
-        - RR = Release Rate: ticks between each -1 after note release
+        PMD Envelope Flow:
+        1. Attack: Hold at max volume (15) for AL ticks
+        2. After attack: volume = 15 + DD (DD is signed byte, usually negative)
+        3. Decay: volume decreases by 1 every SR ticks (SR=0 means sustain forever)
+        4. Release: volume decreases by 1 every RR ticks (RR=0 means instant cut)
         
-        Furnace macro release point (/): when note is released, macro jumps here.
-        We build: [attack + decay portion] / [release portion with RR timing]
+        Furnace ADSR mode (macro.open & 6 == 2):
+        - val[0] = LOW (minimum level)
+        - val[1] = HIGH (maximum level)
+        - val[2] = AR (attack rate: position increases by AR per tick until 255)
+        - val[3] = HT (hold time at peak)
+        - val[4] = DR (decay rate: position decreases by DR per tick to SL)
+        - val[5] = SL (sustain level, 0-255)
+        - val[6] = ST (sustain time before SR kicks in)
+        - val[7] = SR (sustain rate: position decreases by SR per tick)
+        - val[8] = RR (release rate: position decreases by RR on note off)
         """
-        max_vol = 15
-        vol_sequence = []
+        # Convert DD from unsigned byte to signed
+        dd_signed = dd if dd < 128 else dd - 256
         
-        # === ATTACK PHASE ===
-        # Hold at max volume for AL ticks
-        attack_steps = max(1, al) if al > 0 else 1
-        for _ in range(attack_steps):
-            vol_sequence.append(max_vol)
+        # Calculate sustain level after attack
+        # PMD: volume after attack = 15 + dd_signed, then decays from there
+        sustain_vol = max(0, min(15, 15 + dd_signed))
         
-        # === DECAY PHASE ===
-        # After attack, DD is ADDED to volume, then volume decreases by 1 every SR ticks
-        # DD is signed: negative = decay down, positive = swell up
-        # Example: E1,-2,2,1 v13 → 13 + (-2) = 11
-        current_vol = max_vol + dd  # DD is added (negative DD = decrease)
-        current_vol = max(0, min(15, current_vol))
+        # Scale SSG volume (0-15) to Furnace ADSR range (0-255)
+        # LOW = 0, HIGH = 15 for SSG
+        adsr_low = 0
+        adsr_high = 15
         
-        # SR=0 means NO decay (sustain at current level forever)
+        # Furnace SL is in position space (0-255), scale from SSG volume
+        # sustain_vol / 15 * 255
+        adsr_sl = int(sustain_vol * 255 / 15) if sustain_vol > 0 else 0
+        
+        # AR: PMD attack is "hold at max for AL ticks"
+        # In Furnace, AR is rate to reach 255. We want instant attack then hold.
+        # Set AR=255 (instant attack) and HT=AL (hold time)
+        adsr_ar = 255  # Instant attack
+        adsr_ht = al   # Hold at peak for AL ticks
+        
+        # DR: Rate to decay from 255 to SL
+        # In PMD, after hold, volume jumps to sustain level
+        # Set high DR for quick decay to sustain level
+        adsr_dr = 128  # Moderately fast decay
+        
+        # ST: Time before sustain decay starts (0 for PMD behavior)
+        adsr_st = 0
+        
+        # SR: Sustain decay rate
+        # PMD: volume decreases by 1 every SR ticks, so ~17 position units per SR ticks
+        # Furnace SR = rate per tick
+        # If PMD SR=0, sustain forever (Furnace SR=0)
+        # Otherwise, Furnace SR ≈ 17/PMD_SR (decrease ~17 units to match 1 SSG level drop)
         if sr == 0:
-            # Sustain at current volume until release
-            for _ in range(30):  # Hold for a while
-                vol_sequence.append(current_vol)
+            adsr_sr = 0  # No decay during sustain
         else:
-            # Decay down to 0: decrease by 1 every SR ticks
-            decay_speed = sr
-            while current_vol > 0 and len(vol_sequence) < 60:
-                # Hold this volume for SR ticks
-                for _ in range(decay_speed):
-                    vol_sequence.append(current_vol)
-                    if len(vol_sequence) >= 60:
-                        break
-                current_vol -= 1
+            # 17 position units = 1 SSG volume level
+            # To decay 17 units over SR ticks: rate = 17/SR
+            adsr_sr = max(1, min(255, 17 // sr))
         
-        # Add sustain at 0 (or loop point for sustained notes)
-        # For sustained notes, we want to hold at the end of decay
-        # Add a few 0s as sustain floor
-        sustain_vol = 0
-        for _ in range(4):
-            vol_sequence.append(sustain_vol)
-        
-        # Mark where release portion starts
-        release_point = len(vol_sequence)
-        
-        # === RELEASE PHASE ===
-        # When note is released, decay from current volume down to 0
-        # Furnace jumps TO the release point, so we need a full decay sequence here
-        
-        # RR=0 means instant drop to 0
+        # RR: Release rate
+        # Same logic as SR
         if rr == 0:
-            vol_sequence.append(0)
+            adsr_rr = 255  # Instant cut (max rate)
         else:
-            # Release: decay from max volume down to 0 at RR rate
-            # This handles the case where note is released during attack
-            for vol in range(max_vol, -1, -1):
-                for _ in range(rr):
-                    vol_sequence.append(vol)
-                    if len(vol_sequence) >= 127:
-                        break
-                if len(vol_sequence) >= 127:
-                    break
+            adsr_rr = max(1, min(255, 17 // rr))
         
-        # Ensure we end at 0
-        if vol_sequence[-1] != 0:
-            vol_sequence.append(0)
-        
-        # Limit sequence length
-        if len(vol_sequence) > 127:
-            vol_sequence = vol_sequence[:127]
-            release_point = min(release_point, 126)
-        
-        # Build volume macro
+        # Build ADSR macro for volume
         # Format from Furnace instrument.cpp writeMacro():
         #   1 byte: macroType & 31 (0 = volume)
-        #   1 byte: len
+        #   1 byte: len (18 for ADSR mode to hold all params)
         #   1 byte: loop (255 = no loop)
-        #   1 byte: rel (release point index, 255 = no release)
-        #   1 byte: mode (0 = sequence)
-        #   1 byte: (open & 0x3f) | wordSize  
+        #   1 byte: rel (255 = no release point, ADSR handles release via RR)
+        #   1 byte: mode (1 = ADSR according to ftm.cpp)
+        #   1 byte: (open & 0x3f) | wordSize  -- open=3 (bit 1 set = ADSR type, bit 0 = expanded)
         #   1 byte: delay
         #   1 byte: speed (1 = every tick)
-        #   N bytes: data
+        #   N bytes: data (val array with ADSR params)
+        
+        # ADSR params stored in val[0-8]
+        adsr_vals = [
+            adsr_low,   # val[0] = LOW
+            adsr_high,  # val[1] = HIGH
+            adsr_ar,    # val[2] = AR
+            adsr_ht,    # val[3] = HT
+            adsr_dr,    # val[4] = DR
+            adsr_sl,    # val[5] = SL
+            adsr_st,    # val[6] = ST
+            adsr_sr,    # val[7] = SR
+            adsr_rr,    # val[8] = RR
+        ]
+        # Pad to 16 values (val array extends beyond ADSR params)
+        while len(adsr_vals) < 16:
+            adsr_vals.append(0)
         
         macro_vol = bytes([
-            0,  # macroType: 0 = volume
-            len(vol_sequence),  # length
-            255,  # loop (255 = no loop) 
-            release_point,  # release point - macro jumps here on note release
-            0,  # mode (0 = sequence)
-            0x01,  # open=1, wordSize=0 (8-bit unsigned)
-            0,  # delay
-            1,  # speed = 1 tick per step
-        ]) + bytes(vol_sequence)
+            0,    # macroType: 0 = volume
+            16,   # length: need space for ADSR params
+            255,  # loop (255 = no loop)
+            255,  # rel (255 = ADSR handles release via RR)
+            1,    # mode (1 for ADSR according to some imports)
+            0x03, # open = 3 (bit 1 = ADSR type, bit 0 = open/expanded)
+            0,    # delay
+            1,    # speed = 1 tick per step
+        ]) + bytes(adsr_vals)
         
         # MA feature format from Furnace writeFeatureMA():
         #   2 bytes: "MA"
@@ -819,7 +852,7 @@ class FurnaceBuilder:
         
         # Name feature
         if not name:
-            name = f'SSG E{al},{dd},{sr},{rr}'
+            name = f'SSG E{al},{dd_signed},{sr},{rr}'
         feature_name = [
             b'NA',
             pack_short(0),
@@ -857,6 +890,595 @@ class FurnaceBuilder:
             pack_short(TARGET_FURNACE_VERSION),
             pack_short(37),  # instrument type 37 = ADPCM-A
             b''.join(feature_name),
+            b'EN'
+        ]
+        ins_block[1] = pack_long(bl_length(ins_block[2:]))
+        return b''.join(ins_block)
+    
+    def _create_adpcma_drum_kit(self) -> dict:
+        """Create 6 ADPCM-A instruments for YM2608 hardware rhythm.
+        
+        Returns dict mapping Furnace channel (10-15) to instrument index.
+        
+        YM2608 ADPCM-A Rhythm channels:
+        - Channel 10: BD (Bass Drum)
+        - Channel 11: SD (Snare Drum) 
+        - Channel 12: TOP (Top Cymbal/Crash)
+        - Channel 13: HH (Hi-Hat)
+        - Channel 14: TOM (Tom)
+        - Channel 15: RIM (Rim Shot)
+        """
+        # YM2608 ADPCM-A channels in Furnace (PC-98 mode, 16 channels):
+        # 0-5: FM, 6-8: SSG, 9-14: ADPCM-A, 15: ADPCM-B
+        # Testing shows drums were off by 1, so adjust:
+        ADPCMA_DRUMS = [
+            ('BD', 9),    # Bass Drum - ADPCM-A ch 0
+            ('SD', 10),   # Snare Drum - ADPCM-A ch 1
+            ('TOP', 11),  # Top Cymbal - ADPCM-A ch 2
+            ('HH', 12),   # Hi-Hat - ADPCM-A ch 3
+            ('TOM', 13),  # Tom - ADPCM-A ch 4
+            ('RIM', 14),  # Rim Shot - ADPCM-A ch 5
+        ]
+        
+        # Create instruments and return channel -> instrument mapping
+        adpcma_ins = {}  # channel -> instrument index
+        for name, channel in ADPCMA_DRUMS:
+            ins_idx = len(self.instruments)
+            self.instruments.append(self._make_adpcma_instrument(f'ADPCM-A {name}'))
+            adpcma_ins[channel] = ins_idx
+        
+        return adpcma_ins
+    
+    def _rhythm_to_adpcma(self, drum_map: dict):
+        """Convert K/R rhythm channel to ADPCM-A channels (10-15)
+        
+        Uses proper YM2608 hardware rhythm instead of SSG drums.
+        """
+        # Parse R pattern definitions
+        r_patterns = self._parse_rhythm_patterns()
+        
+        if not r_patterns:
+            return
+        
+        # Find the Rhythm-K channel
+        rhythm_ch = None
+        for ch in self.pmd.channels:
+            if ch.name == 'Rhythm-K':
+                rhythm_ch = ch
+                break
+        
+        if not rhythm_ch or not rhythm_ch.events:
+            return
+        
+        # Expand K channel's R pattern references into drum events
+        all_events = []  # (tick, drum_val, length)
+        tick = 0
+        max_tick = 100000
+        
+        loop_stack = []
+        event_index = 0
+        events = rhythm_ch.events
+        
+        while event_index < len(events) and tick < max_tick:
+            event = events[event_index]
+            
+            if isinstance(event, PMDNote):
+                if event.is_rest:
+                    tick += event.length
+                else:
+                    raw_byte = (event.octave << 4) | event.note
+                    pattern_idx = raw_byte
+                    
+                    if 0 <= pattern_idx < len(r_patterns):
+                        r_pattern_events, r_duration = r_patterns[pattern_idx]
+                        
+                        for pat_tick, drum_val, drum_len in r_pattern_events:
+                            all_events.append((tick + pat_tick, drum_val, drum_len))
+                        
+                        if r_duration > 0:
+                            tick += r_duration
+                event_index += 1
+                
+            elif isinstance(event, PMDCommand):
+                if event.cmd == 0xF9:  # Loop start
+                    depth = 1
+                    scan_idx = event_index + 1
+                    loop_count = 2
+                    while scan_idx < len(events) and depth > 0:
+                        scan_event = events[scan_idx]
+                        if isinstance(scan_event, PMDCommand):
+                            if scan_event.cmd == 0xF9:
+                                depth += 1
+                            elif scan_event.cmd == 0xF8:
+                                depth -= 1
+                                if depth == 0:
+                                    loop_count = scan_event.params[0] if scan_event.params else 2
+                        scan_idx += 1
+                    
+                    loop_stack.append({'start': event_index + 1, 'count': loop_count, 'iteration': 0})
+                    event_index += 1
+                    
+                elif event.cmd == 0xF8:  # Loop end
+                    if loop_stack:
+                        loop_info = loop_stack[-1]
+                        loop_info['iteration'] += 1
+                        
+                        if loop_info['count'] == 0:
+                            if loop_info['iteration'] < 2:
+                                event_index = loop_info['start']
+                            else:
+                                loop_stack.pop()
+                                event_index += 1
+                        elif loop_info['iteration'] < loop_info['count']:
+                            event_index = loop_info['start']
+                        else:
+                            loop_stack.pop()
+                            event_index += 1
+                    else:
+                        event_index += 1
+                        
+                elif event.cmd == 0xF7:  # Loop escape
+                    if loop_stack:
+                        loop_info = loop_stack[-1]
+                        if loop_info['iteration'] == loop_info['count'] - 1:
+                            depth = 1
+                            skip_idx = event_index + 1
+                            while skip_idx < len(events) and depth > 0:
+                                cmd = events[skip_idx]
+                                if isinstance(cmd, PMDCommand):
+                                    if cmd.cmd == 0xF9:
+                                        depth += 1
+                                    elif cmd.cmd == 0xF8:
+                                        depth -= 1
+                                skip_idx += 1
+                            event_index = skip_idx
+                            loop_stack.pop()
+                        else:
+                            event_index += 1
+                    else:
+                        event_index += 1
+                else:
+                    event_index += 1
+            else:
+                event_index += 1
+        
+        if not all_events:
+            return
+        
+        # Limit events
+        if len(all_events) > 5000:
+            all_events = all_events[:5000]
+        
+        # Group events by ADPCM-A channel
+        channel_events = {9: [], 10: [], 11: [], 12: [], 13: [], 14: []}
+        
+        for tick_pos, drum_val, length in all_events:
+            # Check each bit and route to appropriate channel
+            for bit_idx in range(11):
+                if drum_val & (1 << bit_idx):
+                    if bit_idx in drum_map:
+                        fur_ch, ins_idx = drum_map[bit_idx]
+                        channel_events[fur_ch].append((tick_pos, ins_idx))
+        
+        # Convert each ADPCM-A channel's events to patterns
+        TICKS_PER_ROW = 3
+        
+        for fur_ch in range(9, 15):
+            events_for_ch = channel_events.get(fur_ch, [])
+            if not events_for_ch:
+                continue
+            
+            # Sort by tick
+            events_for_ch.sort(key=lambda x: x[0])
+            
+            current_pattern_data = bytearray()
+            pattern_index = 0
+            current_row_in_pattern = 0
+            last_ins = None
+            
+            for tick_pos, ins_idx in events_for_ch:
+                row = tick_pos // TICKS_PER_ROW
+                target_pattern = row // self.pattern_length
+                
+                if target_pattern >= 200:
+                    break
+                
+                # Fill patterns to reach target
+                while target_pattern > pattern_index:
+                    rows_left = self.pattern_length - current_row_in_pattern
+                    if rows_left > 0:
+                        self._write_skip(current_pattern_data, rows_left)
+                    current_pattern_data += b'\xFF'
+                    self.patterns[fur_ch].append(
+                        self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
+                    )
+                    pattern_index += 1
+                    current_pattern_data = bytearray()
+                    current_row_in_pattern = 0
+                
+                row_in_pattern = row - (pattern_index * self.pattern_length)
+                skip_rows = row_in_pattern - current_row_in_pattern
+                
+                if skip_rows > 0:
+                    self._write_skip(current_pattern_data, skip_rows)
+                    current_row_in_pattern += skip_rows
+                
+                # Write drum note
+                ins_to_write = ins_idx if ins_idx != last_ins else None
+                note = 60  # C-4 for ADPCM-A
+                
+                flags = 0x01  # Has note
+                if ins_to_write is not None:
+                    flags |= 0x02
+                    last_ins = ins_idx
+                
+                current_pattern_data.append(flags)
+                current_pattern_data.append(note)
+                if ins_to_write is not None:
+                    current_pattern_data.append(ins_to_write)
+                
+                current_row_in_pattern += 1
+            
+            # Finish last pattern
+            if current_row_in_pattern > 0:
+                rows_left = self.pattern_length - current_row_in_pattern
+                if rows_left > 0:
+                    self._write_skip(current_pattern_data, rows_left)
+                current_pattern_data += b'\xFF'
+                self.patterns[fur_ch].append(
+                    self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
+                )
+    
+    def _opna_rhythm_to_adpcma(self):
+        """Extract OPNA rhythm commands (0xEB) from all channels and output to ADPCM-A.
+        
+        The 0xEB command triggers the YM2608 hardware rhythm unit:
+        - Bit 0: BD (Bass Drum) -> Channel 9
+        - Bit 1: SD (Snare Drum) -> Channel 10
+        - Bit 2: TOP (Top Cymbal) -> Channel 11
+        - Bit 3: HH (Hi-Hat) -> Channel 12
+        - Bit 4: TOM (Tom) -> Channel 13
+        - Bit 5: RIM (Rim Shot) -> Channel 14
+        - Bit 7: Key Off flag
+        """
+        # OPNA rhythm bit -> Furnace channel
+        opna_rhythm_map = {0: 9, 1: 10, 2: 11, 3: 12, 4: 13, 5: 14}
+        
+        # Collect rhythm events from all channels
+        channel_events = {9: [], 10: [], 11: [], 12: [], 13: [], 14: []}
+        
+        # Scan all channels for 0xEB commands
+        for ch in self.pmd.channels:
+            if ch.channel_type not in ('fm', 'ssg', 'adpcm'):
+                continue
+            
+            tick = 0
+            for event in ch.events:
+                if isinstance(event, PMDNote):
+                    tick += event.length
+                elif isinstance(event, PMDCommand):
+                    if event.cmd == 0xEB and event.params:
+                        rhythm_byte = event.params[0]
+                        is_keyoff = bool(rhythm_byte & 0x80)
+                        
+                        for bit_idx in range(6):
+                            if rhythm_byte & (1 << bit_idx):
+                                fur_ch = opna_rhythm_map[bit_idx]
+                                if not is_keyoff:
+                                    channel_events[fur_ch].append(tick)
+        
+        # Convert to patterns
+        TICKS_PER_ROW = 3
+        
+        for fur_ch in range(9, 15):
+            events_for_ch = channel_events.get(fur_ch, [])
+            if not events_for_ch:
+                continue
+            
+            # Get instrument for this channel
+            ins_idx = self.adpcma_drum_map.get(fur_ch)
+            
+            # Sort and deduplicate
+            events_for_ch = sorted(set(events_for_ch))
+            
+            current_pattern_data = bytearray()
+            pattern_index = 0
+            current_row_in_pattern = 0
+            ins_written = False
+            
+            for tick_pos in events_for_ch:
+                row = tick_pos // TICKS_PER_ROW
+                target_pattern = row // self.pattern_length
+                
+                if target_pattern >= 200:
+                    break
+                
+                while target_pattern > pattern_index:
+                    rows_left = self.pattern_length - current_row_in_pattern
+                    if rows_left > 0:
+                        self._write_skip(current_pattern_data, rows_left)
+                    current_pattern_data += b'\xFF'
+                    self.patterns[fur_ch].append(
+                        self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
+                    )
+                    pattern_index += 1
+                    current_pattern_data = bytearray()
+                    current_row_in_pattern = 0
+                
+                row_in_pattern = row - (pattern_index * self.pattern_length)
+                skip_rows = row_in_pattern - current_row_in_pattern
+                
+                if skip_rows > 0:
+                    self._write_skip(current_pattern_data, skip_rows)
+                    current_row_in_pattern += skip_rows
+                
+                # Write drum note
+                note = 60  # C-4 for ADPCM-A
+                flags = 0x01  # Has note
+                
+                if ins_idx is not None and not ins_written:
+                    flags |= 0x02
+                    ins_written = True
+                
+                current_pattern_data.append(flags)
+                current_pattern_data.append(note)
+                if flags & 0x02:
+                    current_pattern_data.append(ins_idx)
+                
+                current_row_in_pattern += 1
+            
+            # Finish last pattern
+            if current_row_in_pattern > 0:
+                rows_left = self.pattern_length - current_row_in_pattern
+                if rows_left > 0:
+                    self._write_skip(current_pattern_data, rows_left)
+                current_pattern_data += b'\xFF'
+                self.patterns[fur_ch].append(
+                    self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
+                )
+    def _create_ssg_drum_kit(self):
+        """Create SSG drum instruments based on working Furnace drum kit
+        
+        These definitions are from drums.txt - using FIXED arpeggio mode.
+        Fixed arpeggio values use 0x40000000 | note to play absolute notes.
+        Returns dict mapping effect number to instrument index
+        """
+        # FIXED_FLAG for absolute note values in arpeggio
+        FIXED = 0x40000000
+        
+        # Drum definitions matching drums.txt exactly
+        SSG_DRUMS = {
+            0: {  # Bass Drum - pitch sweep down from fixed notes
+                'name': 'Bass Drum',
+                'vol': [15, 13, 12, 11, 10, 9, 8, 7, 0],
+                # @28 @26 @25 @24 @23 @22 @21 @20 @19 0
+                'arp_fixed': [28, 26, 25, 24, 23, 22, 21, 20, 19],
+                'arp_rel': [0],  # ends with relative 0
+                'duty': [0, 0],
+                'wave': [3, 1],  # tone+noise, then tone only
+            },
+            1: {  # Snare Drum 1 - noise with pitch sweep
+                'name': 'Snare Drum',
+                'vol': [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 0],
+                # @51 @47 @44 @42 @40 @38 @36 @34 @33 @32 @30 @29 @28 @27 0
+                'arp_fixed': [51, 47, 44, 42, 40, 38, 36, 34, 33, 32, 30, 29, 28, 27],
+                'arp_rel': [0],
+                'duty': [24, 25, 26, 27, 28, 29, 30, 31],
+                'wave': [3, 3, 3, 3, 3, 3, 3, 3],
+            },
+            6: {  # Snare Drum 2 (PMD effect 6) - noise only, no arpeggio
+                'name': 'Snare 2',
+                'vol': [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+                'duty': [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+                'wave': [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],  # noise only
+            },
+            9: {  # Crash Cymbal - high pitch @91
+                'name': 'Crash Cymbal',
+                'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
+                'arp_fixed': [91],
+                'arp_rel': [0],
+                'duty': list(range(32)),  # 0-31 sweep
+                'wave': [3] * 32,
+            },
+            7: {  # Hi-Hat Closed - short high noise @91
+                'name': 'Hi-Hat Closed',
+                'vol': [15, 10, 5, 0],
+                'arp_fixed': [91],
+                'arp_rel': [0],
+                'duty': [31, 30],
+                'wave': [3, 3],
+            },
+            8: {  # Hi-Hat Open - longer high noise @91
+                'name': 'Hi-Hat Open',
+                'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
+                'arp_fixed': [91],
+                'arp_rel': [0],
+                'duty': [31, 30],
+                'wave': [3, 3],
+            },
+            # Toms - using pitch slide (no fixed arpeggio)
+            2: {  # Low Tom
+                'name': 'Low Tom',
+                'vol': [15, 15, 14, 14, 13, 13, 0],
+                'duty': [31],
+                'wave': [3],
+                'pitch': [-16],
+                'pitch_mode': 1,
+            },
+            3: {  # Mid Tom
+                'name': 'Mid Tom',
+                'vol': [15, 15, 14, 14, 13, 13, 0],
+                'duty': [31],
+                'wave': [3],
+                'pitch': [-8],
+                'pitch_mode': 1,
+            },
+            4: {  # High Tom
+                'name': 'High Tom',
+                'vol': [15, 15, 14, 14, 13, 13, 0],
+                'duty': [31],
+                'wave': [3],
+                'pitch': [-4],
+                'pitch_mode': 1,
+            },
+            5: {  # Rim Shot
+                'name': 'Rim Shot',
+                'vol': [15, 13, 11, 9, 7, 5, 3, 1, 0],
+                'pitch': [-2],
+                'pitch_mode': 1,
+            },
+            10: {  # Ride Cymbal - high pitch @91
+                'name': 'Ride Cymbal',
+                'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
+                'arp_fixed': [91],
+                'arp_rel': [0],
+                'duty': [31, 30],
+                'wave': [3, 3],
+            },
+        }
+        
+        drum_map = {}  # effect_num -> instrument_index
+        
+        for effect_num, drum_def in SSG_DRUMS.items():
+            ins_idx = len(self.instruments)
+            ins_data = self._make_ssg_drum_from_def(drum_def)
+            self.instruments.append(ins_data)
+            drum_map[effect_num] = ins_idx
+        
+        return drum_map
+    
+    def _make_ssg_drum_from_def(self, drum_def: dict) -> bytes:
+        """Create SSG drum instrument from definition dict"""
+        FIXED_FLAG = 0x40000000
+        
+        name = drum_def.get('name', 'SSG Drum')
+        vol = drum_def.get('vol', [15, 0])
+        arp_fixed = drum_def.get('arp_fixed', None)
+        arp_rel = drum_def.get('arp_rel', None)
+        duty = drum_def.get('duty', None)
+        wave = drum_def.get('wave', None)
+        pitch = drum_def.get('pitch', None)
+        pitch_mode = drum_def.get('pitch_mode', 0)
+        
+        macros = []
+        
+        # Volume macro (type 0)
+        macro_vol = bytes([
+            0,  # macroType: DIV_MACRO_VOL
+            len(vol),
+            255,  # loop
+            255,  # rel
+            0,  # mode
+            0x01,  # open
+            0,  # delay
+            1,  # speed
+        ]) + bytes(vol)
+        macros.append(macro_vol)
+        
+        # Arpeggio macro (type 1) - with fixed notes using 32-bit values
+        if arp_fixed or arp_rel:
+            arp_values = []
+            # Add fixed values (with 0x40000000 flag)
+            if arp_fixed:
+                for note in arp_fixed:
+                    arp_values.append(FIXED_FLAG | note)
+            # Add relative values
+            if arp_rel:
+                for rel in arp_rel:
+                    arp_values.append(rel)  # No flag = relative
+            
+            # Pack as 32-bit little-endian values
+            arp_bytes = b''
+            for val in arp_values:
+                arp_bytes += struct.pack('<I', val)  # unsigned 32-bit
+            
+            macro_arp = bytes([
+                1,  # macroType: DIV_MACRO_ARP
+                len(arp_values),
+                255,  # loop
+                255,  # rel
+                0,  # mode (0 = sequence)
+                0xC1,  # open/type/wordSize: bits 6-7=3 (32-bit signed), bit 0=1 (open)
+                0,  # delay
+                1,  # speed
+            ]) + arp_bytes
+            macros.append(macro_arp)
+        
+        # Duty/Noise freq macro (type 2)
+        if duty:
+            macro_duty = bytes([
+                2,  # macroType: DIV_MACRO_DUTY
+                len(duty),
+                255,  # loop
+                255,  # rel
+                0,  # mode
+                0x01,  # open
+                0,  # delay
+                1,  # speed
+            ]) + bytes(duty)
+            macros.append(macro_duty)
+        
+        # Waveform macro (type 3)
+        if wave:
+            macro_wave = bytes([
+                3,  # macroType: DIV_MACRO_WAVE
+                len(wave),
+                255,  # loop
+                255,  # rel
+                0,  # mode
+                0x01,  # open
+                0,  # delay
+                1,  # speed
+            ]) + bytes(wave)
+            macros.append(macro_wave)
+        
+        # Pitch macro (type 4)
+        if pitch:
+            # Pitch values are signed, pack as signed bytes or words
+            pitch_bytes = b''
+            for val in pitch:
+                if val < -128 or val > 127:
+                    pitch_bytes += struct.pack('<h', val)  # 16-bit
+                else:
+                    pitch_bytes += struct.pack('<b', val)  # 8-bit signed
+            
+            macro_pitch = bytes([
+                4,  # macroType: DIV_MACRO_PITCH
+                len(pitch),
+                255,  # loop
+                255,  # rel
+                pitch_mode,  # mode (1 = relative)
+                0x01,  # open
+                0,  # delay
+                1,  # speed
+            ]) + pitch_bytes
+            macros.append(macro_pitch)
+        
+        # MA feature
+        ma_content = pack_short(8) + b''.join(macros) + bytes([255])
+        
+        feature_ma = [
+            b'MA',
+            pack_short(len(ma_content)),
+            ma_content
+        ]
+        
+        # Name feature
+        feature_name = [
+            b'NA',
+            pack_short(0),
+            pack_string(name)
+        ]
+        feature_name[1] = pack_short(bl_length(feature_name[2:]))
+        
+        # Full instrument - type 6 = AY-3-8910
+        ins_block = [
+            b'INS2',
+            pack_long(0),
+            pack_short(TARGET_FURNACE_VERSION),
+            pack_short(6),  # AY-3-8910
+            b''.join(feature_name),
+            b''.join(feature_ma),
             b'EN'
         ]
         ins_block[1] = pack_long(bl_length(ins_block[2:]))
@@ -905,16 +1527,20 @@ class FurnaceBuilder:
                         self.drum_instruments[8] = ins_idx   # Middle Tom
                         self.drum_instruments[16] = ins_idx  # High Tom
     
-    def _parse_rhythm_patterns(self) -> List[List[Tuple[int, int, int]]]:
+    def _parse_rhythm_patterns(self) -> List[Tuple[List[Tuple[int, int, int]], int]]:
         """Parse R pattern definitions from the rhythm table.
         
         R patterns contain SSG drum sequences using @<value> instruments.
         Format in compiled .M file:
-        - 0x00-0x7F: rest with that length
-        - 0x80-0xBF: drum note (high bits in cmd, low bits in next byte, length after)
-        - 0xC0-0xFF: commands (0xFF = end)
+        - 0x00-0x7F ll: rest, length in next byte
+        - 0x80-0xBF bb ll: drum note (cmd + bb form 14-bit value, ll = length)
+        - 0xC0-0xFE: commands
+        - 0xFF: end of pattern (return)
         
-        Returns list of patterns, each pattern is list of (tick, drum_instrument, length)
+        Drum value calculation: ((cmd << 8) | bb) & 0x3FFF
+        This gives the @value used in MML (bit flags for drum selection)
+        
+        Returns list of (events, total_duration) where events is list of (tick, drum_value, length)
         """
         patterns = []
         data = self.pmd.data
@@ -931,7 +1557,7 @@ class FurnaceBuilder:
             
             pattern_ptr = data[ptr_offset] | (data[ptr_offset + 1] << 8)
             if pattern_ptr == 0:
-                patterns.append([])
+                patterns.append(([], 0))
                 continue
             
             # Convert to absolute offset (add 1 for PMD's addressing)
@@ -939,85 +1565,117 @@ class FurnaceBuilder:
             
             # Validate pointer
             if abs_ptr >= len(data) or abs_ptr < 1:
-                patterns.append([])
+                patterns.append(([], 0))
                 continue
             
-            # Parse R pattern events
+            # Parse R pattern events with loop execution
             pattern_events = []
             tick = 0
             offset = abs_ptr
-            max_iterations = 500
+            max_iterations = 2000  # Allow more iterations for loops
             iterations = 0
+            
+            # Loop state - we need to track loop counters
+            # PMD loops: F9 points to F8's counter position
+            # F8 format: [loop_count, counter, jump_lo, jump_hi]
+            # We'll use a modified copy of the data to track counters
+            loop_counters = {}  # offset -> current count
             
             while offset < len(data) and iterations < max_iterations:
                 iterations += 1
                 cmd = data[offset]
                 offset += 1
                 
-                if cmd == 0xFF:  # End of pattern
+                if cmd == 0xFF:  # End of pattern (return)
                     break
                 elif cmd >= 0x80 and cmd <= 0xBF:
-                    # Drum note: 0x80 + (drum_high << 0), next = drum_low, then length
+                    # Drum note: cmd (0x80-0xBF), next_byte, length
                     if offset + 1 >= len(data):
                         break
-                    drum_low = data[offset]
+                    next_byte = data[offset]
                     length = data[offset + 1]
                     offset += 2
                     
                     if length == 0:
                         length = 1
                     
-                    # Calculate drum instrument: low 8 bits + high 6 bits
-                    # cmd & 0x3F gives high bits (0-63), shifted left 8
-                    drum_val = drum_low | ((cmd & 0x3F) << 8)
-                    
+                    drum_val = ((cmd << 8) | next_byte) & 0x3FFF
                     pattern_events.append((tick, drum_val, length))
                     tick += length
                 elif cmd < 0x80:
-                    # Rest with length = cmd
-                    if cmd > 0:
-                        tick += cmd
+                    # Rest: cmd (00-7F) is marker, length in next byte
+                    if offset < len(data):
+                        length = data[offset]
+                        offset += 1
+                        if length > 0:
+                            tick += length
                 elif cmd >= 0xC0:
-                    # Commands - handle the ones we know about
-                    if cmd == 0xE8:  # \V rhythm master volume
-                        if offset < len(data):
-                            offset += 1
-                    elif cmd == 0xEA:  # \v rhythm channel volume
-                        if offset < len(data):
-                            offset += 1
-                    elif cmd == 0xE9:  # \<pan> rhythm pan
-                        if offset < len(data):
-                            offset += 1
-                    elif cmd == 0xFD:  # v volume (shouldn't appear but handle it)
-                        if offset < len(data):
-                            offset += 1
-                    elif cmd == 0xF9:  # [ loop start
+                    # Commands
+                    if cmd == 0xF9:  # [ loop start - points to F8's counter
                         if offset + 1 < len(data):
+                            # Just skip - F8 will handle the actual looping
                             offset += 2
                     elif cmd == 0xF8:  # ] loop end
                         if offset + 3 < len(data):
-                            offset += 4
-                    elif cmd == 0xF7:  # : loop break
+                            loop_count = data[offset]
+                            counter_offset = offset + 1
+                            # Jump target: stored offset + 1 (PMD addressing) + 2 (skip F9 params)
+                            jump_target = (data[offset + 2] | (data[offset + 3] << 8)) + 1 + 2
+                            
+                            # Initialize or increment counter
+                            if counter_offset not in loop_counters:
+                                loop_counters[counter_offset] = 0
+                            loop_counters[counter_offset] += 1
+                            
+                            # Check if we should loop
+                            if loop_count == 0:
+                                # Infinite loop - just do it twice for conversion
+                                if loop_counters[counter_offset] < 2:
+                                    offset = jump_target
+                                else:
+                                    offset += 4
+                            elif loop_counters[counter_offset] < loop_count:
+                                offset = jump_target
+                            else:
+                                offset += 4
+                                # Reset counter for next time
+                                loop_counters[counter_offset] = 0
+                        else:
+                            break
+                    elif cmd == 0xF7:  # : loop exit
                         if offset + 1 < len(data):
+                            target_offset = (data[offset] | (data[offset + 1] << 8)) + 1
                             offset += 2
+                            # Check if this is the last iteration
+                            counter_offset = target_offset + 1  # counter is at target + 1
+                            loop_count_at_target = data[target_offset] if target_offset < len(data) else 1
+                            current_count = loop_counters.get(counter_offset, 0)
+                            if current_count == loop_count_at_target - 1:
+                                # Exit - jump past the loop end
+                                offset = target_offset + 4
+                    elif cmd == 0xE8:  # \V rhythm master volume
+                        offset += 1 if offset < len(data) else 0
+                    elif cmd == 0xEA:  # \v rhythm channel volume
+                        offset += 1 if offset < len(data) else 0
+                    elif cmd == 0xE9:  # \<pan> rhythm pan
+                        offset += 1 if offset < len(data) else 0
+                    elif cmd == 0xFD:  # v volume
+                        offset += 1 if offset < len(data) else 0
                     elif cmd == 0xDF:  # C zenlen
-                        if offset < len(data):
-                            offset += 1
-                    elif cmd == 0xFC:  # t tempo - variable length
+                        offset += 1 if offset < len(data) else 0
+                    elif cmd == 0xFC:  # t tempo
                         if offset < len(data):
                             sub = data[offset]
                             offset += 1
-                            if sub >= 0xFB:
+                            if sub >= 0xFB and offset < len(data):
                                 offset += 1
-                    else:
-                        # Unknown command, try to continue
-                        pass
+                    # else: unknown command, skip
             
-            patterns.append(pattern_events)
+            patterns.append((pattern_events, tick))
         
         return patterns
     
-    def _rhythm_to_patterns(self):
+    def _rhythm_to_patterns(self, ssg_drum_map: dict):
         """Convert K/R rhythm channel to Furnace SSG-I channel (8)
         
         PMD K/R system:
@@ -1025,16 +1683,13 @@ class FurnaceBuilder:
         - R patterns contain SSG drum definitions with @<value> instruments
         - Drums play on SSG channel 3 (SSG-I in Furnace = channel 8)
         
-        Drum instrument values (binary flags):
-        - @1 = Bass Drum
-        - @2 = Snare 1
-        - @4/@8/@16 = Toms (different panning)
-        - @32 = Rim Shot
-        - @64 = Snare 2
-        - @128 = Hi-Hat closed
-        - @256/@512/@1024 = Cymbals
+        SSG Drum instrument values:
+        - @128 = effect 0 (Bass Drum)
+        - @129 = effect 1 (Snare Drum)
+        - @130 = effect 2 (Low Tom)
+        - etc. (value - 128 = effect index)
         
-        Values can be combined: @129 = @1 + @128 = Bass + Hi-Hat
+        Values >= 128 are SSG effect indices, values < 128 are hardware rhythm flags
         """
         # Parse R pattern definitions from the rhythm table
         r_patterns = self._parse_rhythm_patterns()
@@ -1053,29 +1708,109 @@ class FurnaceBuilder:
             return
         
         # Expand K channel's R pattern references into drum events
-        # Format: (tick, drum_value, length)
+        # K channel uses bytes 0x00-0x7F as R pattern indices (single byte, no length!)
+        # Need to handle loop commands (F9/F8/F7) properly
         all_events = []
         tick = 0
         max_tick = 100000
         
-        for event in rhythm_ch.events:
-            if tick > max_tick:
-                break
+        # Loop handling similar to _channel_to_patterns
+        loop_stack = []
+        event_index = 0
+        events = rhythm_ch.events
+        
+        while event_index < len(events) and tick < max_tick:
+            event = events[event_index]
             
             if isinstance(event, PMDNote):
                 if event.is_rest:
                     tick += event.length
                 else:
-                    # Note value is the R pattern index
-                    pattern_idx = event.note + (event.octave * 12)
+                    # K channel: raw byte value is stored as (octave << 4) | note
+                    raw_byte = (event.octave << 4) | event.note
+                    pattern_idx = raw_byte  # Direct R pattern index (0-127)
                     
                     if 0 <= pattern_idx < len(r_patterns):
-                        r_pattern = r_patterns[pattern_idx]
+                        r_pattern_events, r_duration = r_patterns[pattern_idx]
+                        
                         # Add each drum event from the R pattern
-                        for pat_tick, drum_val, drum_len in r_pattern:
+                        for pat_tick, drum_val, drum_len in r_pattern_events:
                             all_events.append((tick + pat_tick, drum_val, drum_len))
+                        
+                        # Advance tick by the R pattern's total duration
+                        if r_duration > 0:
+                            tick += r_duration
+                event_index += 1
+                
+            elif isinstance(event, PMDCommand):
+                if event.cmd == 0xF9:  # Loop start [
+                    # Find matching ] and get loop count
+                    depth = 1
+                    scan_idx = event_index + 1
+                    loop_count = 2
+                    while scan_idx < len(events) and depth > 0:
+                        scan_event = events[scan_idx]
+                        if isinstance(scan_event, PMDCommand):
+                            if scan_event.cmd == 0xF9:
+                                depth += 1
+                            elif scan_event.cmd == 0xF8:
+                                depth -= 1
+                                if depth == 0:
+                                    loop_count = scan_event.params[0] if scan_event.params else 2
+                        scan_idx += 1
                     
-                    tick += event.length
+                    loop_stack.append({
+                        'start': event_index + 1,
+                        'count': loop_count,
+                        'iteration': 0,
+                    })
+                    event_index += 1
+                    
+                elif event.cmd == 0xF8:  # Loop end ]
+                    if loop_stack:
+                        loop_info = loop_stack[-1]
+                        loop_info['iteration'] += 1
+                        
+                        if loop_info['count'] == 0:
+                            # Infinite loop - do 2 iterations
+                            if loop_info['iteration'] < 2:
+                                event_index = loop_info['start']
+                            else:
+                                loop_stack.pop()
+                                event_index += 1
+                        elif loop_info['iteration'] < loop_info['count']:
+                            event_index = loop_info['start']
+                        else:
+                            loop_stack.pop()
+                            event_index += 1
+                    else:
+                        event_index += 1
+                        
+                elif event.cmd == 0xF7:  # Loop escape :
+                    if loop_stack:
+                        loop_info = loop_stack[-1]
+                        if loop_info['iteration'] == loop_info['count'] - 1:
+                            # Skip to end of loop
+                            depth = 1
+                            skip_idx = event_index + 1
+                            while skip_idx < len(events) and depth > 0:
+                                cmd = events[skip_idx]
+                                if isinstance(cmd, PMDCommand):
+                                    if cmd.cmd == 0xF9:
+                                        depth += 1
+                                    elif cmd.cmd == 0xF8:
+                                        depth -= 1
+                                skip_idx += 1
+                            event_index = skip_idx
+                            loop_stack.pop()
+                        else:
+                            event_index += 1
+                    else:
+                        event_index += 1
+                else:
+                    event_index += 1
+            else:
+                event_index += 1
         
         if not all_events:
             return
@@ -1084,28 +1819,45 @@ class FurnaceBuilder:
         if len(all_events) > 5000:
             all_events = all_events[:5000]
         
-        # Map drum values to notes for SSG-I
-        # We'll use different octaves/notes for different drums
-        # This is a simplified mapping - user can adjust instruments later
-        def drum_to_note(drum_val):
-            # Find the primary (lowest) drum in the combined value
-            for bit, note in [(1, 36), (2, 38), (4, 41), (8, 43), (16, 45),
-                              (32, 37), (64, 40), (128, 42), (256, 46), (512, 49), (1024, 51)]:
-                if drum_val & bit:
-                    return note  # Return MIDI-style note
-            return 60  # Default C-4
+        # Map drum values to notes and instruments
+        # PMD drum values are BIT FLAGS where bit position = drum index:
+        #   Bit 0 (@1)    = Bass Drum (SSG drum 0)
+        #   Bit 1 (@2)    = Snare 1 (SSG drum 1)
+        #   Bit 2 (@4)    = Low Tom (SSG drum 2)
+        #   Bit 3 (@8)    = Mid Tom (SSG drum 3)
+        #   Bit 4 (@16)   = High Tom (SSG drum 4)
+        #   Bit 5 (@32)   = Rim Shot (SSG drum 5)
+        #   Bit 6 (@64)   = Snare 2 (SSG drum 6)
+        #   Bit 7 (@128)  = HH Closed (SSG drum 7)
+        #   Bit 8 (@256)  = HH Open (SSG drum 8)
+        #   Bit 9 (@512)  = Crash (SSG drum 9)
+        #   Bit 10 (@1024)= Ride (SSG drum 10)
+        # Lowest set bit takes priority for SSG channel
+        def get_drum_note_and_ins(drum_val):
+            # Find lowest set bit to determine which SSG drum plays
+            for bit_idx in range(11):  # Bits 0-10
+                bit_mask = 1 << bit_idx
+                if drum_val & bit_mask:
+                    # Map bit index to SSG drum instrument
+                    ins = ssg_drum_map.get(bit_idx, ssg_drum_map.get(0, None))
+                    # Use fixed note - instrument macro controls the sound
+                    note = 36  # C-2
+                    return note, ins
+            # Fallback to bass drum
+            return 36, ssg_drum_map.get(0, None)
         
         # Convert to SSG-I channel (8)
         fur_channel = 8
-        ticks_per_row = 6
+        TICKS_PER_ROW = 3  # Match the main channel conversion
         max_patterns = 200
         
         current_pattern_data = bytearray()
         pattern_index = 0
         current_row_in_pattern = 0
+        last_ins = None
         
         for tick, drum_val, length in all_events:
-            row = tick // ticks_per_row
+            row = tick // TICKS_PER_ROW
             target_pattern = row // self.pattern_length
             
             if target_pattern >= max_patterns:
@@ -1132,9 +1884,16 @@ class FurnaceBuilder:
                 self._write_skip(current_pattern_data, skip_rows)
                 current_row_in_pattern += skip_rows
             
+            # Get note and instrument for this drum
+            note, ins = get_drum_note_and_ins(drum_val)
+            
+            # Only write instrument if changed
+            ins_to_write = ins if ins != last_ins else None
+            if ins is not None:
+                last_ins = ins
+            
             # Write drum note to SSG-I
-            note = drum_to_note(drum_val)
-            entry = self._make_entry(note=note)
+            entry = self._make_entry(note=note, ins=ins_to_write)
             current_pattern_data.extend(entry)
             current_row_in_pattern += 1
         
@@ -1193,7 +1952,9 @@ class FurnaceBuilder:
         pending_effects = []   # Effects to apply to next note
         tie_active = False     # Track if tie (&) is active for portamento
         pitch_slide_active = False  # Track if we need to stop pitch slide
-        current_gate_time = 8  # Gate time q (0-8, where 8 = full length, 0 = staccato)
+        # Gate time: qdata = ticks before note end to keyoff (0 = full length, higher = more staccato)
+        current_qdata = 0  # Direct q value (ticks to cut from end)
+        current_qdatb = 0  # Q percentage value (0-8, where gate = length * Q / 8)
         
         # Volume step for ) and ( commands (v increments)
         # FM: roughly 4 per v step, SSG: 1 per v step
@@ -1247,12 +2008,34 @@ class FurnaceBuilder:
                 if current_envelope is not None and channel.channel_type == 'ssg':
                     ssg_env_for_note = current_envelope
                 
-                # Gate time: add ECxx note cut effect if gate_time < 8
-                # q0 = immediate cut, q8 = full length
-                # Calculate cut tick: (note_length * gate_time) / 8
-                note_gate_time = current_gate_time
+                # Calculate actual gate time (qdat) for this note
+                # PMD gate time: qdat = ticks before note end to keyoff
+                # q command: direct ticks value
+                # Q command: percentage (length * Q / 8)
+                qdat = current_qdata
+                if current_qdatb > 0:
+                    qdat += (event.length * current_qdatb) // 8
                 
-                events_with_ticks.append((tick_pos, event, current_transpose + current_master, current_volume, note_effects, ssg_env_for_note, note_gate_time))
+                events_with_ticks.append((tick_pos, event, current_transpose + current_master, current_volume, note_effects, ssg_env_for_note, qdat))
+                
+                # Calculate release tick and add note off/release events
+                if not event.is_rest:
+                    # PMD: keyoff when (remaining_length <= qdat)
+                    # So release_tick = note_start + note_length - qdat
+                    if qdat > 0 and qdat < event.length:
+                        release_tick = tick_pos + event.length - qdat
+                    else:
+                        # qdat = 0 means full length
+                        release_tick = tick_pos + event.length
+                    
+                    if release_tick > tick_pos:
+                        if channel.channel_type == 'ssg':
+                            # SSG: always use REL to trigger macro release phase
+                            events_with_ticks.append((release_tick, 'NOTE_RELEASE', 0, None, [], None, 0))
+                        elif qdat > 0:
+                            # FM/other: only add OFF if there's early gate time
+                            events_with_ticks.append((release_tick, 'NOTE_OFF', 0, None, [], None, 0))
+                
                 tick_pos += event.length
                 event_index += 1
                 pending_effects = []  # Clear pending effects after note
@@ -1360,13 +2143,13 @@ class FurnaceBuilder:
                         current_envelope = (al, dd, sr, rr)
                     elif event.cmd == 0xFB:  # Tie (&)
                         tie_active = True
-                    elif event.cmd == 0xFE and event.params:  # Gate time q (0-8)
-                        # q command: sets gate time as fraction of 8
-                        # q0 = staccato (note cut immediately), q8 = full length
-                        current_gate_time = min(8, event.params[0])
-                    elif event.cmd == 0xC4 and event.params:  # Gate time Q (alternate)
-                        # Q command: similar to q but with different semantics
-                        current_gate_time = min(8, event.params[0])
+                    elif event.cmd == 0xFE and event.params:  # Gate time q
+                        # q command: direct ticks value (ticks to cut from end)
+                        # Higher value = more staccato, 0 = full length
+                        current_qdata = event.params[0]
+                    elif event.cmd == 0xC4 and event.params:  # Gate time Q
+                        # Q command: percentage-based (0-8 range, gate = length * Q / 8)
+                        current_qdatb = event.params[0]
                     elif event.cmd == 0xDA and len(event.params) >= 3:  # Portamento { }
                         # Params: [start_note, end_note, duration]
                         # Each note byte: high nibble = octave, low nibble = note (0-11)
@@ -1421,35 +2204,38 @@ class FurnaceBuilder:
             else:
                 event_index += 1
         
+        # Sort events by tick position (important because NOTE_RELEASE events are added after their notes)
+        events_with_ticks.sort(key=lambda x: x[0])
+        
         # Second pass: place notes at correct row positions
         last_row = -1
         for item in events_with_ticks:
             if len(item) == 7:
-                tick_pos, event, note_transpose, note_volume, note_effects, note_ssg_env, note_gate_time = item
+                tick_pos, event, note_transpose, note_volume, note_effects, note_ssg_env, note_qdat = item
             elif len(item) == 6:
                 tick_pos, event, note_transpose, note_volume, note_effects, note_ssg_env = item
-                note_gate_time = 8  # Full length
+                note_qdat = 0  # Full length (no early keyoff)
             elif len(item) == 5:
                 tick_pos, event, note_transpose, note_volume, note_effects = item
                 note_ssg_env = None
-                note_gate_time = 8
+                note_qdat = 0
             elif len(item) == 4:
                 tick_pos, event, note_transpose, note_volume = item
                 note_effects = []
                 note_ssg_env = None
-                note_gate_time = 8
+                note_qdat = 0
             elif len(item) == 3:
                 tick_pos, event, note_transpose = item
                 note_volume = None
                 note_effects = []
                 note_ssg_env = None
-                note_gate_time = 8
+                note_qdat = 0
             else:
                 tick_pos, event = item
                 note_transpose = 0
                 note_volume = None
                 note_effects = []
-                note_gate_time = 8
+                note_qdat = 0
             row = tick_pos // TICKS_PER_ROW
             
             if isinstance(event, PMDNote):
@@ -1524,24 +2310,16 @@ class FurnaceBuilder:
                             vol_to_set = vol_value
                             last_vol = vol_value
                 
-                # Add gate time effect (ECxx - note cut after xx ticks)
-                # Gate time: q0 = immediate cut, q8 = full length
-                # Calculate cut tick: (note_length * gate_time) / 8
+                # Gate time is now handled via NOTE_OFF/NOTE_RELEASE events
+                # No need for ECxx effects
                 fx_list = list(note_effects) if note_effects else []
-                if note_gate_time < 8 and isinstance(event, PMDNote) and not event.is_rest:
-                    # Calculate the cut tick within this note
-                    cut_tick = (event.length * note_gate_time) // 8
-                    # ECxx: cut after xx ticks (0x00-0xFF)
-                    cut_tick = max(0, min(255, cut_tick))
-                    if cut_tick > 0:
-                        fx_list.append((0xEC, cut_tick))
                 
                 # Add effects if any
                 fx_to_set = fx_list if fx_list else None
                 
-                # Update effects column count if needed
+                # Update effects column count if needed (max 8 columns)
                 if fx_to_set and len(fx_to_set) > 0:
-                    self.effects_count[fur_channel] = max(self.effects_count[fur_channel], len(fx_to_set))
+                    self.effects_count[fur_channel] = min(8, max(self.effects_count[fur_channel], len(fx_to_set)))
                 
                 entry = self._make_entry(note=fur_note, ins=ins_to_set, vol=vol_to_set, fx=fx_to_set)
                 current_pattern_data += entry
@@ -1571,12 +2349,66 @@ class FurnaceBuilder:
                     self._write_skip(current_pattern_data, skip_rows)
                     current_row_in_pattern += skip_rows
                 
-                # Update effects column count
+                # Update effects column count (max 8 columns)
                 if note_effects and len(note_effects) > 0:
-                    self.effects_count[fur_channel] = max(self.effects_count[fur_channel], len(note_effects))
+                    self.effects_count[fur_channel] = min(8, max(self.effects_count[fur_channel], len(note_effects)))
                 
                 # Add entry with just the effect (no note, no instrument, no volume)
                 entry = self._make_entry(fx=note_effects)
+                current_pattern_data += entry
+                current_row_in_pattern += 1
+                last_row = row
+            
+            elif event == 'NOTE_RELEASE':
+                # Write a REL note (182) to trigger macro release phase (SSG)
+                # Handle pattern boundaries and skips
+                while row >= (pattern_index + 1) * self.pattern_length:
+                    rows_left = self.pattern_length - current_row_in_pattern
+                    self._write_skip(current_pattern_data, rows_left)
+                    current_pattern_data += b'\xFF'
+                    self.patterns[fur_channel].append(
+                        self._make_pattern(fur_channel, pattern_index, bytes(current_pattern_data))
+                    )
+                    pattern_index += 1
+                    current_pattern_data = bytearray()
+                    current_row_in_pattern = 0
+                
+                row_in_pattern = row - (pattern_index * self.pattern_length)
+                skip_rows = row_in_pattern - current_row_in_pattern
+                
+                if skip_rows > 0:
+                    self._write_skip(current_pattern_data, skip_rows)
+                    current_row_in_pattern += skip_rows
+                
+                # Write REL note (182) - triggers macro release only
+                entry = self._make_entry(note=FUR_NOTE_REL)
+                current_pattern_data += entry
+                current_row_in_pattern += 1
+                last_row = row
+            
+            elif event == 'NOTE_OFF':
+                # Write an OFF note (180) to cut the note (FM channels)
+                # Handle pattern boundaries and skips
+                while row >= (pattern_index + 1) * self.pattern_length:
+                    rows_left = self.pattern_length - current_row_in_pattern
+                    self._write_skip(current_pattern_data, rows_left)
+                    current_pattern_data += b'\xFF'
+                    self.patterns[fur_channel].append(
+                        self._make_pattern(fur_channel, pattern_index, bytes(current_pattern_data))
+                    )
+                    pattern_index += 1
+                    current_pattern_data = bytearray()
+                    current_row_in_pattern = 0
+                
+                row_in_pattern = row - (pattern_index * self.pattern_length)
+                skip_rows = row_in_pattern - current_row_in_pattern
+                
+                if skip_rows > 0:
+                    self._write_skip(current_pattern_data, skip_rows)
+                    current_row_in_pattern += skip_rows
+                
+                # Write OFF note (180) - note off/cut
+                entry = self._make_entry(note=FUR_NOTE_OFF)
                 current_pattern_data += entry
                 current_row_in_pattern += 1
                 last_row = row
@@ -1633,17 +2465,20 @@ class FurnaceBuilder:
             self.ins_id_map[0] = 0
             self.instruments.append(self._make_fm_instrument(default_ins))
         
-        # Create dummy ADPCM-A instrument for rhythm channels
-        self.adpcma_instrument_idx = len(self.instruments)
-        self.instruments.append(self._make_adpcma_instrument())
+        # Create ADPCM-A drum kit for hardware rhythm (0xEB commands)
+        self.adpcma_drum_map = self._create_adpcma_drum_kit()
+        
+        # Create SSG drum kit instruments for K/R channel
+        self.ssg_drum_map = self._create_ssg_drum_kit()
         
         # Map PMD channels to Furnace channels
-        # YM2608: FM1-6 (0-5), SSG1-3 (6-8), ADPCM (9), Rhythm (10-15)
-        # Note: SSG-I (channel 8) is used for SSG drums from Rhythm-K
+        # YM2608: FM1-6 (0-5), SSG1-3 (6-8), ADPCM-B (9), ADPCM-A Rhythm (10-15)
+        # SSG-I (channel 8) is used for SSG drums from K/R channel
+        # ADPCM-A channels 10-15 are used for hardware rhythm (0xEB commands)
         channel_map = {
             'FM-A': 0, 'FM-B': 1, 'FM-C': 2, 'FM-D': 3, 'FM-E': 4, 'FM-F': 5,
             'SSG-G': 6, 'SSG-H': 7,
-            # 'SSG-I': 8,  # Reserved for SSG drums
+            # 'SSG-I': 8,  # Reserved for SSG drums from K/R
             'ADPCM-J': 9
         }
         
@@ -1656,9 +2491,29 @@ class FurnaceBuilder:
                 if note_count > 0:
                     self._channel_to_patterns(ch, fur_ch)
         
-        # Convert K/R rhythm channel to SSG-I (channel 8)
-        # Disabled for now - drums need more work
-        # self._rhythm_to_patterns()
+        # Convert K/R rhythm channel:
+        # 1. SSG-I (channel 8) plays lowest bit only (SSG limitation)
+        self._rhythm_to_patterns(self.ssg_drum_map)
+        
+        # 2. ADPCM-A (channels 9-14) plays ALL triggered drums (RSS hardware)
+        # Create mapping: SSG drum bit -> (ADPCM-A channel, instrument)
+        ssg_to_adpcma_map = {
+            0: (9, self.adpcma_drum_map[9]),     # @1 Bass Drum -> BD
+            1: (10, self.adpcma_drum_map[10]),   # @2 Snare 1 -> SD
+            2: (13, self.adpcma_drum_map[13]),   # @4 Low Tom -> TOM
+            3: (13, self.adpcma_drum_map[13]),   # @8 Mid Tom -> TOM
+            4: (13, self.adpcma_drum_map[13]),   # @16 High Tom -> TOM
+            5: (14, self.adpcma_drum_map[14]),   # @32 Rim Shot -> RIM
+            6: (10, self.adpcma_drum_map[10]),   # @64 Snare 2 -> SD
+            7: (12, self.adpcma_drum_map[12]),   # @128 HH Closed -> HH
+            8: (12, self.adpcma_drum_map[12]),   # @256 HH Open -> HH
+            9: (11, self.adpcma_drum_map[11]),   # @512 Crash -> TOP
+            10: (11, self.adpcma_drum_map[11]),  # @1024 Ride -> TOP
+        }
+        self._rhythm_to_adpcma(ssg_to_adpcma_map)
+        
+        # 3. Also handle 0xEB commands from other channels (direct OPNA rhythm triggers)
+        self._opna_rhythm_to_adpcma()
         
         # Determine order count
         self.order_count = max(len(pats) for pats in self.patterns) if any(self.patterns) else 1

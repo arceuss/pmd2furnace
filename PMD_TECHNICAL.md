@@ -73,6 +73,29 @@ The internal clock rate for EX0 is approximately: `tempo * 48 / 60` Hz
 
 ---
 
+## PMD Predefined SSG Envelopes
+
+**Source:** PMDDotNET/PMDDotNETCompiler/mml_seg.cs `psgenvdat`
+
+These are the built-in SSG envelope presets (format: `{ AL, DD, SR, RR }`):
+
+| Preset | Values | Name | Description |
+|--------|--------|------|-------------|
+| @0 | 0, 0, 0, 0 | Standard | No envelope (flat) |
+| @1 | 2, 255, 0, 1 | Synth 1 | DD=255 is -1 signed |
+| @2 | 2, 254, 0, 1 | Synth 2 | DD=254 is -2 signed |
+| @3 | 2, 254, 0, 8 | Synth 3 | Slower release |
+| @4 | 2, 255, 24, 1 | E.Piano 1 | Slow decay (SR=24) |
+| @5 | 2, 254, 24, 1 | E.Piano 2 | |
+| @6 | 2, 254, 4, 1 | Glocken/Marimba | Fast decay (SR=4) |
+| @7 | 2, 1, 0, 1 | Strings | DD=1 (slight swell), SR=0 (sustain) |
+| @8 | 1, 2, 0, 1 | Brass 1 | Quick attack |
+| @9 | 1, 2, 24, 1 | Brass 2 | Quick attack, slow decay |
+
+**Note:** DD values 128-255 are negative when treated as signed bytes.
+
+---
+
 ## Common E Command Values in TH4
 
 From Bad Apple (Th04_07):
@@ -100,19 +123,45 @@ From Th14_13:
 
 ## Gate Time (q/Q Commands)
 
-**Source:** PMDMML_EN.MAN.htm
+**Source:** PMDMML_EN.MAN.htm, PMDDotNET source code
+
+### How Gate Time Actually Works (from PMDDotNET)
+
+PMD's gate time is **NOT** "play for q/8 of the note". Instead:
+
+- `qdat` = **ticks before note end to keyoff**
+- Keyoff happens when `remaining_length <= qdat`
+- `qdat = 0` means full note length (no early keyoff)
+- Higher qdat = more staccato
+
+**Variables in PMDDotNET:**
+```
+qdata  - q command value (direct ticks)
+qdatb  - Q command value (percentage 0-8)
+qdat   - calculated gate time for current note
+qdat2  - minimum gate guarantee
+qdat3  - random gate variation
+```
+
+**Calculation:**
+```
+qdat = qdata + (note_length * qdatb / 8)
+release_tick = note_start + note_length - qdat
+```
 
 ### q Command (0xFE)
-`q0` to `q8` - Sets gate time as fraction of 8
+Sets direct tick value to cut from end of note.
 
-- `q0` = Staccato (note cuts immediately after keyon)
-- `q8` = Full length (default)
-- `q6` = Note plays for 6/8 (75%) of duration
-
-**Calculation:** `actual_length = note_length * q / 8`
+- `q0` = Full length (no early keyoff) - DEFAULT
+- `q2` = Keyoff 2 ticks before note ends
+- Higher values = more staccato
 
 ### Q Command (0xC4)
-Similar to q but specifies minimum gate time in ticks.
+Sets percentage-based gate time (0-8 range).
+
+- `Q0` = Full length
+- `Q4` = Keyoff at 50% of note length (length * 4 / 8)
+- `Q8` = Keyoff at 100% (effectively immediate)
 
 ---
 
@@ -166,6 +215,74 @@ Similar to q but specifies minimum gate time in ticks.
 
 ---
 
+## PMD Rhythm K/R Channel
+
+**Source:** https://mml-guide.readthedocs.io/pmd/rhythm/
+
+### K Channel
+The K channel sequences rhythm **definitions** using `R<n>`:
+```
+K    l2 R0 R1
+```
+
+### R Definitions
+R definitions use `@<value>` to select drums. Values are **bit flags**:
+
+| Bit | @Value | SSG Drum |
+|-----|--------|----------|
+| 0 | @1 | Bass Drum |
+| 1 | @2 | Snare Drum 1 |
+| 2 | @4 | Low Tom |
+| 3 | @8 | Middle Tom |
+| 4 | @16 | High Tom |
+| 5 | @32 | Rim Shot |
+| 6 | @64 | Snare Drum 2 |
+| 7 | @128 | Closed Hi-hat |
+| 8 | @256 | Open Hi-hat |
+| 9 | @512 | Crash Cymbal |
+| 10 | @1024 | Ride Cymbal |
+
+**Combining drums:** Add values to play multiple: `@130 = @128 + @2` = Hi-hat + Snare
+
+**SSG Priority:** SSG channel only plays ONE drum - lowest bit takes priority.
+
+**RSS Mapping:**
+- @1-@64 trigger RSS drums (BD, SD, Tom, RimShot)
+- @4, @8, @16 all trigger Tom RSS with different panning
+- @256, @512, @1024 trigger Cymbal RSS with different panning
+
+### Commands Supported by K/R
+- `[ : ]` - Loop
+- `l` - Default Length
+- `L` - Channel Loop
+- `t` - Tempo
+- `C` - Zenlen
+- `T` - Timer
+
+Notes and rests are NOT supported in K channel (only R definitions).
+
+### K Channel Binary Format
+
+In compiled .M files, the K channel uses a special format:
+- **0x00-0x7F**: R pattern index (R0, R1, R2... R127) - NOT rests!
+- **0x80-0xBF**: NOT USED (these would be drum notes in R patterns)
+- **0xC0-0xFF**: Commands (same as other channels)
+
+Example: `00 01 F9...` = Play R0, Play R1, then loop start...
+
+### R Pattern Binary Format
+
+Inside R patterns, drum notes use this format:
+- **Byte 0**: 0x80-0xBF (drum marker)
+- **Byte 1**: Low bits of drum value
+- **Byte 2**: Note length in ticks
+
+Drum value calculation: `((byte0 << 8) | byte1) & 0x3FFF`
+
+Example: `81 01 06` = drum @257 (0x0101), length 6 ticks
+
+---
+
 ## Channel Mapping
 
 | PMD | Name | Type | Furnace Ch |
@@ -210,16 +327,132 @@ Similar to q but specifies minimum gate time in ticks.
 
 ---
 
+## Furnace Note Types
+
+**Source:** furnace/doc/3-pattern/README.md
+
+| Value | Display | Name | Description |
+|-------|---------|------|-------------|
+| 180 | `OFF` | Note Off | Key off for FM/hardware envelope; note cut otherwise |
+| 181 | `===` | Note Release | Triggers macro release AND key off for FM |
+| 182 | `REL` | Macro Release | Triggers macro release only, NO key off for FM |
+
+**For PMD conversion:**
+- FM channels: Use `OFF` (180) for gate time note cuts
+- SSG channels: Use `REL` (182) to trigger software envelope release phase
+
+---
+
+## Furnace ADSR Macro Mode
+
+**Source:** furnace/src/engine/macroInt.cpp
+
+Furnace macros can use ADSR mode instead of sequences. Set `macro.open & 6 == 2`.
+
+**ADSR Parameters (stored in val[0-8]):**
+
+| Index | Name | Description |
+|-------|------|-------------|
+| val[0] | LOW | Minimum output level |
+| val[1] | HIGH | Maximum output level |
+| val[2] | AR | Attack Rate (position increases by AR per tick) |
+| val[3] | HT | Hold Time (ticks to hold at peak before decay) |
+| val[4] | DR | Decay Rate (position decreases by DR per tick) |
+| val[5] | SL | Sustain Level (0-255, position to sustain at) |
+| val[6] | ST | Sustain Time (ticks before sustain decay starts) |
+| val[7] | SR | Sustain Rate (position decreases by SR per tick) |
+| val[8] | RR | Release Rate (position decreases by RR on note release) |
+
+**ADSR Flow:**
+1. Attack: `pos += AR` each tick until `pos >= 255`
+2. Hold: Wait `HT` ticks at peak
+3. Decay: `pos -= DR` each tick until `pos <= SL`
+4. Sustain: `pos -= SR` each tick (or hold if SR=0)
+5. Release (on note off): `pos -= RR` each tick until `pos <= 0`
+
+**Output scaling:** Final value is interpolated between LOW and HIGH based on position (0-255).
+
+---
+
+## Furnace AY-3-8910 Instrument Macros
+
+**Source:** furnace/doc/4-instrument/ay8910.md
+
+The AY-3-8910 (SSG) instrument in Furnace has these macros:
+
+| Macro | Type | Description |
+|-------|------|-------------|
+| Volume | 0 | Volume sequence (0-15) |
+| Arpeggio | 1 | Pitch sequence |
+| Duty/Noise Freq | 2 | Noise generator frequency (0-31, **global!**) |
+| Waveform | 3 | Sound type selector |
+| Pitch | 4 | Fine pitch |
+| Phase Reset | 5 | Trigger envelope restart |
+| Ex1 (Envelope) | 6 | Hardware envelope settings |
+| Ex2 (AutoEnv Num) | 7 | Envelope freq = channel freq × Num |
+| Ex3 (AutoEnv Den) | 8 | Envelope freq = channel freq × Den |
+
+**Waveform values:**
+- Bit 0: Tone enabled
+- Bit 1: Noise enabled  
+- Bit 2: Envelope enabled
+
+Common combinations:
+- 1 = Tone only
+- 2 = Noise only
+- 3 = Tone + Noise
+- 4 = Envelope only
+- 5 = Tone + Envelope
+- 6 = Noise + Envelope
+- 7 = All
+
+**Envelope settings (Ex1):**
+- Bit 0: Enable
+- Bit 1: Direction (0=down, 1=up)
+- Bit 2: Alternate
+- Bit 3: Hold
+
+**Note:** Noise frequency is GLOBAL - affects all SSG channels!
+
+### Working SSG Drum Definitions (from drums.txt)
+
+These are known-working Furnace instruments for SSG drums:
+
+| # | Name | Volume | Arp (Fixed) | Duty (Noise) | Wave |
+|---|------|--------|-------------|--------------|------|
+| 0 | Bass Drum | 15→0 (9 frames) | +28→+19 | 0 | 3→1 |
+| 1 | Snare Drum | 15→0 (14 frames) | +51→+27 | 24→31 | 3 |
+| 2 | Low Tom | 15→0 (7 frames) | - | 31 | 3, pitch -16 |
+| 3 | Mid Tom | 15→0 (7 frames) | - | 31 | 3, pitch -8 |
+| 4 | High Tom | 15→0 (7 frames) | - | 31 | 3, pitch -4 |
+| 5 | Rim Shot | 15→0 (9 frames) | - | - | -, pitch -2 |
+| 6 | Snare 2 | 15→0 (16 frames) | - | 16→31 | 2 (noise only) |
+| 7 | Hi-Hat Closed | 15→0 (4 frames) | +91 | 31,30 | 3 |
+| 8 | Hi-Hat Open | 15→0 (17 frames) | +91 | 31,30 | 3 |
+| 9 | Crash Cymbal | 15→0 (17 frames) | +91 | 0→31 | 3 |
+| 10 | Ride Cymbal | 15→0 (17 frames) | +91 | 31,30 | 3 |
+
+**Arpeggio "Fixed" mode:** Values with 0x40000000 flag are absolute semitones from C-0.
+- +28 = E-2, +51 = D#4, +91 = G-7
+
+**Waveform values:** 1=tone, 2=noise, 3=tone+noise
+
+---
+
 ## Furnace Effect Mapping
 
 | PMD Feature | Furnace Effect | Notes |
 |-------------|----------------|-------|
-| Detune (D) | E5xx | 80=center |
-| Pan (p) | 08xy | x=left, y=right |
-| Gate time (q) | ECxx | Note cut after xx ticks |
-| Portamento ({}) | E1xy/E2xy | Note slide up/down |
-| Volume slide | 0Axy / F3xx/F4xx | |
-| Song loop (L) | 0Bxx | Jump to order |
+| Detune (D) | E5xx | 80=center, range ±1 semitone |
+| Pan (p) | 08xy | x=left, y=right (FF=center) |
+| Gate time (q) | OFF note or ECxx | Prefer OFF notes at release tick |
+| Portamento ({}) | E1xy/E2xy | Note slide up/down, x=speed y=semitones |
+| Stop slide | E200 | Stop any active pitch slide |
+| Volume slide | 0Axy | x=up rate, y=down rate |
+| Fine vol up | F4xx | Single tick volume up |
+| Fine vol down | F3xx | Single tick volume down |
+| Song loop (L) | 0Bxx | Jump to order xx |
+| Note cut | ECxx | Cut note after xx ticks |
 
 ---
 
