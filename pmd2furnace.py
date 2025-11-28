@@ -2054,9 +2054,9 @@ class FurnaceBuilder:
                 if current_qdatb > 0:
                     qdat += (event.length * current_qdatb) // 8
                 
-                # Calculate cut timing for ECxx effect (FM channels only)
+                # Calculate release timing for FCxx effect (FM channels only)
                 # qdat = ticks before note end to trigger keyoff
-                cut_tick_offset = None  # Tick offset within row for ECxx effect
+                cut_tick_offset = None  # Tick offset within row for FCxx effect
                 
                 if not event.is_rest and channel.channel_type == 'fm' and qdat > 0 and qdat < event.length:
                     # Calculate when cut happens relative to note start
@@ -2067,7 +2067,7 @@ class FurnaceBuilder:
                     cut_tick_in_row = cut_tick % TICKS_PER_ROW
                     
                     if cut_row == note_row:
-                        # Cut is in the same row as note - use ECxx on the note
+                        # Release is in the same row as note - use FCxx on the note
                         cut_tick_offset = cut_tick_in_row
                     else:
                         # Cut is on a different row - add NOTE_OFF event with tick offset
@@ -2276,7 +2276,7 @@ class FurnaceBuilder:
         # Second pass: place notes at correct row positions
         last_row = -1
         for item in events_with_ticks:
-            # Unpack with cut_tick_offset for ECxx effects
+            # Unpack with cut_tick_offset for FCxx effects
             cut_tick_offset = None
             if len(item) == 8:
                 tick_pos, event, note_transpose, note_volume, note_effects, note_ssg_env, note_qdat, cut_tick_offset = item
@@ -2383,9 +2383,9 @@ class FurnaceBuilder:
                 # Build effects list
                 fx_list = list(note_effects) if note_effects else []
                 
-                # Add ECxx (note cut) effect for FM channels with same-row gate time
+                # Add FCxx (note release) effect for FM channels with same-row gate time
                 if cut_tick_offset is not None and channel.channel_type == 'fm':
-                    fx_list.append((0xEC, cut_tick_offset))
+                    fx_list.append((0xFC, cut_tick_offset))
                 
                 # Add effects if any
                 fx_to_set = fx_list if fx_list else None
@@ -2468,7 +2468,7 @@ class FurnaceBuilder:
                 if row == last_row:
                     continue
                 
-                # Use ECxx effect for precise note cut timing
+                # Use FCxx effect for precise note release timing
                 # Handle pattern boundaries and skips
                 while row >= (pattern_index + 1) * self.pattern_length:
                     rows_left = self.pattern_length - current_row_in_pattern
@@ -2488,9 +2488,9 @@ class FurnaceBuilder:
                     self._write_skip(current_pattern_data, skip_rows)
                     current_row_in_pattern += skip_rows
                 
-                # Use ECxx effect with tick offset for precise cut, otherwise use EC00
+                # Use FCxx effect with tick offset for precise release, otherwise use FC00
                 tick_offset = cut_tick_offset if cut_tick_offset is not None else 0
-                entry = self._make_entry(fx=[(0xEC, tick_offset)])
+                entry = self._make_entry(fx=[(0xFC, tick_offset)])
                 current_pattern_data += entry
                 current_row_in_pattern += 1
                 last_row = row
