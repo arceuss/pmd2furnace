@@ -587,6 +587,30 @@ class FurnaceBuilder:
         1024: 'Ride Cymbal', # @1024
     }
     
+    # Commands that are implemented/handled
+    HANDLED_COMMANDS = {
+        0xFF,  # Instrument
+        0xFE,  # Gate time q
+        0xFD,  # Volume V
+        0xFC,  # Tempo t/T
+        0xFB,  # Tie &
+        0xFA,  # Detune D
+        0xF9,  # Loop start [
+        0xF8,  # Loop end ]
+        0xF7,  # Loop escape :
+        0xF6,  # Loop point L
+        0xF5,  # Transpose _
+        0xF4,  # Volume up )
+        0xF3,  # Volume down (
+        0xF0,  # SSG Envelope E
+        0xEC,  # Pan p
+        0xEB,  # Hardware rhythm (ADPCM-A)
+        0xE9,  # Rhythm pan
+        0xDA,  # Portamento { }
+        0xC4,  # Gate time Q
+        0xB2,  # Master transpose _M
+    }
+    
     def __init__(self, pmd: PMDParser):
         self.pmd = pmd
         self.pattern_length = 64
@@ -597,6 +621,8 @@ class FurnaceBuilder:
         # Start with 2 effect columns for all channels to support multiple effects
         self.effects_count = [2] * self.channel_count
         self.instruments: List[bytes] = []
+        # Track unknown commands for logging
+        self.unknown_commands: dict = {}  # cmd -> {channels: set, count: int, params_example: list}
         self.tempo = pmd.tempo  # PMD tempo (half-note BPM)
         self.loop_point_order = None  # Pattern order for loop point (L command)
         self.ssg_envelope_instruments = {}  # Maps (al, dd, sr, rr) -> instrument index
@@ -2421,6 +2447,18 @@ class FurnaceBuilder:
                         pending_effects = []
                         event_index += 1
                         continue  # Skip adding the command itself
+                    
+                    # Log unknown/unhandled commands
+                    if event.cmd not in self.HANDLED_COMMANDS:
+                        if event.cmd not in self.unknown_commands:
+                            self.unknown_commands[event.cmd] = {
+                                'channels': set(),
+                                'count': 0,
+                                'params_example': event.params
+                            }
+                        self.unknown_commands[event.cmd]['channels'].add(channel.name)
+                        self.unknown_commands[event.cmd]['count'] += 1
+                    
                     events_with_ticks.append((tick_pos, event, 0, current_volume, []))
                     event_index += 1
             else:
@@ -3024,6 +3062,26 @@ class FurnaceBuilder:
             ]
         adir[1] = pack_long(bl_length(adir[2:]))
         return b''.join(adir)
+    
+    def print_unknown_commands(self):
+        """Print any unknown/unhandled PMD commands encountered during conversion"""
+        if not self.unknown_commands:
+            return
+        
+        print("\n" + "-" * 60)
+        print("Unknown/unhandled PMD commands encountered:")
+        print("-" * 60)
+        
+        # Sort by command byte for consistent output
+        for cmd in sorted(self.unknown_commands.keys()):
+            info = self.unknown_commands[cmd]
+            channels = ', '.join(sorted(info['channels']))
+            params = info['params_example']
+            params_str = ' '.join(f'{p:02X}' for p in params) if params else '(no params)'
+            print(f"  0x{cmd:02X}: {info['count']:4d}x in [{channels}] - example params: {params_str}")
+        
+        print("-" * 60)
+        print("See pmd_SeqFormat.txt or PMDWin source for command details.")
 
 
 # =============================================================================
@@ -3070,6 +3128,10 @@ def main():
         f.write(fur_data)
     
     print(f"Written: {output_file} ({len(fur_data)} bytes)")
+    
+    # Log any unknown commands for future implementation
+    builder.print_unknown_commands()
+    
     print("\nDone! Open the .fur file in Furnace Tracker.")
 
 
