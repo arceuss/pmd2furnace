@@ -1306,26 +1306,26 @@ class FurnaceBuilder:
                 'duty': [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
                 'wave': [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],  # noise only
             },
-            9: {  # Crash Cymbal - high pitch @91
+            9: {  # Crash Cymbal - high pitch G-7 (151)
                 'name': 'Crash Cymbal',
                 'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
-                'arp_fixed': [91],
+                'arp_fixed': [151],
                 'arp_rel': [0],
                 'duty': list(range(32)),  # 0-31 sweep
                 'wave': [3] * 32,
             },
-            7: {  # Hi-Hat Closed - short high noise @91
+            7: {  # Hi-Hat Closed - short high noise G-7 (151)
                 'name': 'Hi-Hat Closed',
                 'vol': [15, 10, 5, 0],
-                'arp_fixed': [91],
+                'arp_fixed': [151],
                 'arp_rel': [0],
                 'duty': [31, 30],
                 'wave': [3, 3],
             },
-            8: {  # Hi-Hat Open - longer high noise @91
+            8: {  # Hi-Hat Open - longer high noise G-7 (151)
                 'name': 'Hi-Hat Open',
                 'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
-                'arp_fixed': [91],
+                'arp_fixed': [151],
                 'arp_rel': [0],
                 'duty': [31, 30],
                 'wave': [3, 3],
@@ -1361,10 +1361,10 @@ class FurnaceBuilder:
                 'pitch': [-2],
                 'pitch_mode': 1,
             },
-            10: {  # Ride Cymbal - high pitch @91
+            10: {  # Ride Cymbal - high pitch G-7 (151)
                 'name': 'Ride Cymbal',
                 'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
-                'arp_fixed': [91],
+                'arp_fixed': [151],
                 'arp_rel': [0],
                 'duty': [31, 30],
                 'wave': [3, 3],
@@ -1869,7 +1869,8 @@ class FurnaceBuilder:
         # Lowest set bit takes priority for SSG channel
         def get_drum_note_and_ins(drum_val):
             # Find lowest set bit to determine which SSG drum plays
-            # Cymbals/hi-hats need G-7 (note 91) to sound correct
+            # Cymbals/hi-hats need G-7 (note 151 in Furnace) to sound correct
+            # Furnace note numbering: C-0 = ~60, so G-7 = 60 + 7*12 + 7 = 151
             CYMBAL_BITS = {7, 8, 9, 10}  # HH Closed, HH Open, Crash, Ride
             
             for bit_idx in range(11):  # Bits 0-10
@@ -1877,8 +1878,8 @@ class FurnaceBuilder:
                 if drum_val & bit_mask:
                     # Map bit index to SSG drum instrument
                     ins = ssg_drum_map.get(bit_idx, ssg_drum_map.get(0, None))
-                    # Use G-7 for cymbals/hi-hats, C-2 for others
-                    note = 91 if bit_idx in CYMBAL_BITS else 36
+                    # Use G-7 (151) for cymbals/hi-hats, C-2 (36) for others
+                    note = 151 if bit_idx in CYMBAL_BITS else 36
                     return note, ins
             # Fallback to bass drum
             return 36, ssg_drum_map.get(0, None)
