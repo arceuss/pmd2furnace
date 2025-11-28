@@ -261,6 +261,26 @@ R definitions use `@<value>` to select drums. Values are **bit flags**:
 
 Notes and rests are NOT supported in K channel (only R definitions).
 
+### Rhythm Sequence Data Format
+
+**Source:** pmd_SeqFormat.txt
+
+The K channel references rhythm subroutines (R patterns). Here's how the binary works:
+
+**K Channel (Rhythm Sequence):**
+```
+00-7F    - Execute rhythm subroutine N (R0, R1, R2...)
+80-FF    - Sequence commands (loops, etc.)
+```
+
+**R Pattern (Rhythm Subroutine):**
+```
+00-7F ll - Rest, length ll ticks
+80-BF bb ll - Drum note: value = ((cmd << 8) | bb) & 0x3FFF, length ll
+C0-FE    - Sequence commands
+FF       - Subroutine return
+```
+
 ### K Channel Binary Format
 
 In compiled .M files, the K channel uses a special format:
@@ -303,27 +323,112 @@ Example: `81 01 06` = drum @257 (0x0101), length 6 ticks
 
 ## Binary Command Reference
 
-| Byte | Command | Params | Description |
-|------|---------|--------|-------------|
-| 0xFF | @ | 1 | Instrument |
-| 0xFE | q | 1+ | Gate time |
-| 0xFD | V | 1 | Volume |
-| 0xFC | t/T | 1+ | Tempo |
-| 0xFB | & | 0 | Tie |
-| 0xFA | D | 2 | Detune |
-| 0xF9 | [ | 2 | Loop start |
-| 0xF8 | ] | 4 | Loop end |
-| 0xF7 | : | 2 | Loop break |
-| 0xF6 | L | 0 | Loop point |
-| 0xF5 | _ | 1 | Transpose |
-| 0xF4 | ) | 0 | Volume up |
-| 0xF3 | ( | 0 | Volume down |
-| 0xF2 | M | 4 | LFO set |
-| 0xF1 | * | 1 | LFO switch |
-| 0xF0 | E | 4 | SSG envelope |
-| 0xEC | p | 1 | Pan |
-| 0xDA | {} | 3 | Portamento |
-| 0xC4 | Q | 1 | Gate time alt |
+**Source:** pmd_SeqFormat.txt (PMDWin 0.36)
+
+### Implemented Commands ✅
+
+| Byte | MML | Params | Description | Furnace Mapping |
+|------|-----|--------|-------------|-----------------|
+| 0xFF | @ | 1 | Set instrument | Instrument change |
+| 0xFE | q | 1+ | Gate time (ticks before keyoff) | FCxx effect |
+| 0xFD | V | 1 | Set volume (00=silent, 7F/0F=max) | Volume column |
+| 0xFC | t/T | 1+ | Set tempo (sub-cmds: FD/FE/FF) | Tempo (global) |
+| 0xFB | & | 0 | Tie/Hold | Note continuation |
+| 0xFA | D | 2 | Set detune (signed 16-bit) | E5xx (detune) |
+| 0xF9 | [ | 2 | Loop start | Pattern loop |
+| 0xF8 | ] | 4 | Loop end (tt cc oooo) | Pattern loop |
+| 0xF7 | : | 2 | Loop escape/break | Pattern loop exit |
+| 0xF6 | L | 0 | Master loop start | 0Bxx (song loop) |
+| 0xF5 | _ | 1 | Set transposition | Note transpose |
+| 0xF4 | ) | 0 | Volume up (+3dB) | Volume change |
+| 0xF3 | ( | 0 | Volume down (-3dB) | Volume change |
+| 0xF0 | E | 4 | PSG envelope (AR,DR,SR,RR) | SSG volume macro |
+| 0xEC | p | 1 | Set panning (0=off,1=R,2=L,3=C) | 08xy (pan) |
+| 0xEB | \r | 1 | OPNA rhythm key on | ADPCM-A notes |
+| 0xE9 | \< | 1 | OPNA rhythm panning | 08xy on ADPCM-A |
+| 0xE7 | _~ | 1 | Relative transpose (add) | Note transpose |
+| 0xDA | {} | 3 | Portamento (from,to,len) | E1xy/E2xy (slide) |
+| 0xC4 | Q | 1 | Gate time % (0-8, len*Q/8) | FCxx effect |
+
+### Parsed but Not Converted ⚠️
+
+| Byte | MML | Params | Description | Notes |
+|------|-----|--------|-------------|-------|
+| 0xF2 | M | 4 | LFO/Vibrato (delay,speed,depthA,depthB) | Parsed, not output |
+| 0xF1 | * | 1 | LFO switch (enable/disable) | Parsed, not output |
+| 0xEF | y | 2 | Direct OPN register write | Parsed, not output |
+| 0xEE | w | 1 | PSG noise frequency | Parsed, not output |
+| 0xED | P | 1 | PSG tone/noise mask | Parsed, not output |
+| 0xEA | \v | 1 | OPNA rhythm volume | Parsed, not output |
+| 0xE8 | \V | 1 | OPNA rhythm master volume | Parsed, not output |
+| 0xE6 | | 1 | OPNA rhythm volume add | Parsed, not output |
+| 0xE5 | | 2 | OPNA rhythm volume add 2 | Parsed, not output |
+| 0xE4 | H | 1 | Hardware LFO delay | Parsed, not output |
+| 0xE3 | )n | 1 | Volume up by N | Parsed, not output |
+| 0xE2 | (n | 1 | Volume down by N | Parsed, not output |
+| 0xE1 | | 1 | Hardware LFO set | Parsed, not output |
+| 0xE0 | | 1 | Hardware LFO speed (reg 22) | Parsed, not output |
+| 0xDF | C | 1 | Set ZENLEN | Parsed, affects timing |
+| 0xDE | | 1 | Fine volume up (next note) | Parsed, not output |
+| 0xDD | | 1 | Fine volume down (next note) | Parsed, not output |
+| 0xDC | | 1 | Set status byte | Parsed, not output |
+| 0xDB | | 1 | Add to status byte | Parsed, not output |
+| 0xD9 | | 1 | HLFO waveform | Parsed, not output |
+| 0xD8 | | 1 | HLFO AMD/PMD | Parsed, not output |
+| 0xD7 | | 1 | HLFO frequency | Parsed, not output |
+| 0xD6 | | 2 | MD set | Parsed, not output |
+| 0xD5 | | 2 | Detune add | Parsed, not output |
+| 0xD4 | | 1 | SSG effect | Parsed, not output |
+| 0xD3 | | 1 | FM effect | Parsed, not output |
+| 0xD2 | | 1 | Fade out | Parsed, not output |
+| 0xD1 | | 1 | (Unused) | Parsed, ignored |
+| 0xD0 | | 1 | Noise freq add | Parsed, not output |
+| 0xCF | s | 1 | FM slot mask | Parsed, not output |
+| 0xCE | | 6 | Unknown | Parsed, not output |
+| 0xCD | | 5 | SSG envelope extended | Parsed, not output |
+| 0xCC | | 1 | Detune extend mode | Parsed, not output |
+| 0xCB | MW | 1 | LFO waveform | Parsed, not output |
+| 0xCA | | 1 | Extend mode bit 1 | Parsed, not output |
+| 0xC9 | | 1 | Extend mode bit 2 | Parsed, not output |
+| 0xC8 | | 3 | Slot detune | Parsed, not output |
+| 0xC7 | | 3 | Slot detune 2 | Parsed, not output |
+| 0xC6 | | 6 | FM3 extended mode init | Parsed, not output |
+| 0xC5 | | 1 | Volume mask | Parsed, not output |
+| 0xC3 | | 2 | Pan extended | Parsed, not output |
+| 0xC2 | MD | 1 | LFO delay | Parsed, not output |
+| 0xC1 | | 0 | Slur/legato ignore keyoff | Parsed, not output |
+| 0xC0 | | 1+ | Part mask | Parsed, not output |
+| 0xBF | MB | 4 | LFO set B | Parsed, not output |
+| 0xBE | | 1 | LFO switch B | Parsed, not output |
+| 0xBD | | 2 | MD set B | Parsed, not output |
+| 0xBC | | 1 | LFO wave B | Parsed, not output |
+| 0xBB | | 1 | Extend mode bit 5 | Parsed, not output |
+| 0xBA | | 1 | Volume mask B | Parsed, not output |
+| 0xB9 | | 1 | LFO delay B | Parsed, not output |
+| 0xB8 | | 2 | TL set | Parsed, not output |
+| 0xB7 | | 1 | MD count | Parsed, not output |
+| 0xB6 | | 1 | FB set | Parsed, not output |
+| 0xB5 | | 2 | Slot delay | Parsed, not output |
+| 0xB4 | | 16 | PPZ extend | Parsed, not output |
+| 0xB3 | q2 | 1 | Gate minimum | Parsed, not output |
+| 0xB2 | | 1 | Secondary transpose | Parsed, not output |
+| 0xB1 | q3 | 1 | Gate randomizer range | Parsed, not output |
+
+### Special Values
+
+| Byte | Description |
+|------|-------------|
+| 0x00-0x7F | Note (octave<<4 \| note), followed by length byte |
+| 0x0F | Rest (note=F within any octave) |
+| 0x80 | Track end |
+
+### Notes on Notes
+
+- High nibble (0-7) = octave
+- Low nibble (0-B) = note (C, C#, D, D#, E, F, F#, G, G#, A, A#, B)
+- Low nibble 0xC = hold/tie marker
+- Low nibble 0xF = rest
+- Always followed by 1 length byte
 
 ---
 
@@ -444,15 +549,46 @@ These are known-working Furnace instruments for SSG drums:
 | PMD Feature | Furnace Effect | Notes |
 |-------------|----------------|-------|
 | Detune (D) | E5xx | 80=center, range ±1 semitone |
-| Pan (p) | 08xy | x=left, y=right (FF=center) |
-| Gate time (q) | OFF note or ECxx | Prefer OFF notes at release tick |
-| Portamento ({}) | E1xy/E2xy | Note slide up/down, x=speed y=semitones |
+| Pan (p) | 08xy | x=left, y=right (FF=center, 0F=right, F0=left) |
+| Gate time (q/Q) | FCxx | Note release after xx ticks in current row |
+| Gate time (different row) | OFF note | OFF (180) placed at release tick |
+| SSG envelope release | REL note | REL (182) for macro release |
+| Portamento ({}) | E1xy/E2xy | Note slide up/down |
 | Stop slide | E200 | Stop any active pitch slide |
-| Volume slide | 0Axy | x=up rate, y=down rate |
-| Fine vol up | F4xx | Single tick volume up |
-| Fine vol down | F3xx | Single tick volume down |
 | Song loop (L) | 0Bxx | Jump to order xx |
-| Note cut | ECxx | Cut note after xx ticks |
+| Note cut | ECxx | Hard cut after xx ticks (not used) |
+| Note release | FCxx | Release envelope after xx ticks |
+
+### Pan Value Conversion
+
+| PMD | Furnace 08xy | Description |
+|-----|--------------|-------------|
+| 0x00 | 0x00 | Off (mute) |
+| 0x01 | 0x0F | Right only |
+| 0x02 | 0xF0 | Left only |
+| 0x03 | 0xFF | Center (both) |
+
+---
+
+## Features NOT Converted
+
+The following PMD features are parsed but not converted to Furnace:
+
+| Feature | Reason |
+|---------|--------|
+| LFO/Vibrato (M, MA, MB) | Furnace has different vibrato system |
+| Hardware LFO (H, port 22h) | YM2608-specific, not directly mappable |
+| FM slot mask (s) | FM operator control not in patterns |
+| PSG tone/noise mix (P) | Would need per-note instrument changes |
+| PSG noise frequency (w) | Global setting, complex to track |
+| Direct register writes (y) | Too low-level for pattern conversion |
+| Fade out | Furnace handles this differently |
+| Extended FM3 mode | Special 4-op mode not supported |
+| Part masking | Channel mute, not relevant |
+| PPZ/PPS samples | Separate sample system |
+| Status bytes | Internal driver state |
+
+These features would require significant effort to implement and are rarely critical for accurate playback.
 
 ---
 
@@ -461,4 +597,6 @@ These are known-working Furnace instruments for SSG drums:
 - [PMDMML_EN.MAN](https://pigu-a.github.io/pmddocs/pmdmml.htm) - Full MML documentation
 - [BotB Lyceum - PMD Effects](https://battleofthebits.com/lyceum/View/Professional%20Music%20Driver%20Effects%20Commands) - Quick reference
 - [pedipanol's MML Guide](https://mml-guide.readthedocs.io/pmd/resources/) - Resource links
+- pmd_SeqFormat.txt (in readthisforpmdstuff/) - Binary format documentation
+- PMDWin source (in readthisforpmdstuff/PMDWin/) - Reference implementation
 
