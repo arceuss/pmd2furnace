@@ -2143,7 +2143,7 @@ class FurnaceBuilder:
         pitch_slide_active = False  # Track if we need to stop pitch slide
         # Gate time: qdata = ticks before note end to keyoff (0 = full length, higher = more staccato)
         current_qdata = 0  # Direct q value (ticks to cut from end)
-        current_qdatb = 0  # Q percentage value (0-8, where gate = length * Q / 8)
+        current_qdatb = 0  # Q percentage value (0-255, where gate = length * Q / 256)
         
         # Volume step for ) and ( commands (v increments)
         # FM: roughly 4 per v step, SSG: 1 per v step
@@ -2200,10 +2200,10 @@ class FurnaceBuilder:
                 # Calculate actual gate time (qdat) for this note
                 # PMD gate time: qdat = ticks before note end to keyoff
                 # q command: direct ticks value
-                # Q command: percentage (length * Q / 8)
+                # Q command: percentage (length * Q / 256) per PMDWin
                 qdat = current_qdata
                 if current_qdatb > 0:
-                    qdat += (event.length * current_qdatb) // 8
+                    qdat += (event.length * current_qdatb) >> 8  # Matches PMDWin: (leng * qdatb) >> 8
                 
                 # Calculate release timing for FCxx effect (FM channels only)
                 # qdat = ticks before note end to trigger keyoff
@@ -2363,7 +2363,7 @@ class FurnaceBuilder:
                         # Higher value = more staccato, 0 = full length
                         current_qdata = event.params[0]
                     elif event.cmd == 0xC4 and event.params:  # Gate time Q
-                        # Q command: percentage-based (0-8 range, gate = length * Q / 8)
+                        # Q command: percentage-based (0-255 range, gate = length * Q / 256)
                         current_qdatb = event.params[0]
                     elif event.cmd == 0xDA and len(event.params) >= 3:  # Portamento { }
                         # Params: [start_note, end_note, duration]
