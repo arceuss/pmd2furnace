@@ -694,11 +694,11 @@ class FurnaceBuilder:
         
         feature_fm[1] = pack_short(bl_length(feature_fm[2:]))
         
-        # Name feature
+        # Name feature - use MML-style naming: @<id> <alg> <fb>
         feature_name = [
             b'NA',
             pack_short(0),
-            pack_string(f'FM {ins.id:02X}')
+            pack_string(f'@{ins.id} {ins.alg} {ins.fb}')
         ]
         feature_name[1] = pack_short(bl_length(feature_name[2:]))
         
