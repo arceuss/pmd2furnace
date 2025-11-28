@@ -1418,8 +1418,8 @@ class FurnaceBuilder:
             current_pattern_data += entry
             current_row_in_pattern += 1
             
-            # Update effects count
-            self.effects_count[fur_ch] = max(self.effects_count[fur_ch], len(fx_list))
+            # Update effects count (max 8 columns)
+            self.effects_count[fur_ch] = min(8, max(self.effects_count[fur_ch], len(fx_list)))
         
         # Finish last pattern
         if current_row_in_pattern > 0:
@@ -2940,7 +2940,7 @@ class FurnaceBuilder:
         
         info_2 = [
             orders,
-            b''.join(pack_byte(n) for n in self.effects_count),
+            b''.join(pack_byte(min(8, n)) for n in self.effects_count),  # Cap at 8 effects max
             pack_byte(3) * self.channel_count,  # channel shown
             pack_byte(0) * self.channel_count,  # channel collapsed
             pack_string('') * self.channel_count,  # channel names
