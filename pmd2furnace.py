@@ -2210,19 +2210,34 @@ class FurnaceBuilder:
                 cut_tick_offset = None  # Tick offset within row for FCxx effect
                 
                 if not event.is_rest and channel.channel_type == 'fm' and qdat > 0 and qdat < event.length:
-                    # Calculate when cut happens relative to note start
-                    ticks_until_cut = event.length - qdat
-                    note_row = tick_pos // TICKS_PER_ROW
-                    cut_tick = tick_pos + ticks_until_cut
-                    cut_row = cut_tick // TICKS_PER_ROW
-                    cut_tick_in_row = cut_tick % TICKS_PER_ROW
+                    # Look ahead to see if next event is a note (not rest) that immediately follows
+                    # If so, skip release - the new keyon will naturally cut off the old note
+                    # This prevents weird fade artifacts from FCxx releasing the wrong note
+                    next_is_immediate_note = False
+                    look_tick = tick_pos + event.length
+                    for look_idx in range(event_index + 1, len(channel.events)):
+                        look_event = channel.events[look_idx]
+                        if isinstance(look_event, PMDNote):
+                            if not look_event.is_rest:
+                                # Next is a note starting right after this one - skip release
+                                next_is_immediate_note = True
+                            break  # Stop looking after first PMDNote (rest or not)
+                        # Skip commands, keep looking
                     
-                    if cut_row == note_row:
-                        # Release is in the same row as note - use FCxx on the note
-                        cut_tick_offset = cut_tick_in_row
-                    else:
-                        # Cut is on a different row - add NOTE_OFF event with tick offset
-                        events_with_ticks.append((cut_tick, 'NOTE_OFF', 0, None, [], None, 0, cut_tick_in_row))
+                    if not next_is_immediate_note:
+                        # There's a rest or end of track - add release effect
+                        ticks_until_cut = event.length - qdat
+                        note_row = tick_pos // TICKS_PER_ROW
+                        cut_tick = tick_pos + ticks_until_cut
+                        cut_row = cut_tick // TICKS_PER_ROW
+                        cut_tick_in_row = cut_tick % TICKS_PER_ROW
+                        
+                        if cut_row == note_row:
+                            # Release is in the same row as note - use FCxx on the note
+                            cut_tick_offset = cut_tick_in_row
+                        else:
+                            # Cut is on a different row - add NOTE_OFF event with tick offset
+                            events_with_ticks.append((cut_tick, 'NOTE_OFF', 0, None, [], None, 0, cut_tick_in_row))
                 
                 events_with_ticks.append((tick_pos, event, current_transpose + current_master, current_volume, note_effects, ssg_env_for_note, qdat, cut_tick_offset))
                 
