@@ -2712,11 +2712,11 @@ class FurnaceBuilder:
             pack_string(''),  # subsong comment
             pack_byte(0),     # additional subsongs
             pack_byte(0) * 3,
-            pack_string('PC-98'),
-            pack_string(''),
-            pack_string(''),
-            pack_string(''),
-            pack_string('PC-98'),
+            pack_string('NEC PC-98'),  # system name
+            pack_string(''),  # category
+            pack_string(' / '.join(self.pmd.header.memo) if self.pmd.header.memo else ''),  # album (PMD memo)
+            pack_string(''),  # artist
+            pack_string('NEC PC-98'),  # system name 2
             pack_string(''),
             pack_float(1.0),  # chip 1 volume
             pack_float(0.0),  # chip 1 panning
