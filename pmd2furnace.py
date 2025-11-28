@@ -2421,6 +2421,15 @@ class FurnaceBuilder:
         
         # Second pass: place notes at correct row positions
         last_row = -1
+        
+        # For FM channels, add envelope hard reset effect (30xx) at the start
+        # This fixes weird fade in/out artifacts by ensuring envelope resets properly
+        if channel.channel_type == 'fm' and events_with_ticks:
+            # Add 3001 (enable hard envelope reset) on first row
+            first_entry = self._make_entry(fx=[(0x30, 0x01)])
+            current_pattern_data += first_entry
+            current_row_in_pattern += 1
+            self.effects_count[fur_channel] = max(self.effects_count[fur_channel], 1)
         for item in events_with_ticks:
             # Unpack with cut_tick_offset for FCxx effects
             cut_tick_offset = None
