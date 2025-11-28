@@ -630,6 +630,47 @@ These are known-working Furnace instruments for SSG drums:
 
 ---
 
+## Furnace Note Numbering
+
+**Source:** furnace/src/gui/guiConst.cpp
+
+Furnace supports 180 notes (0-179), including **negative octaves**:
+
+| Note Range | Octave | Display Format | Example |
+|------------|--------|----------------|---------|
+| 0-11 | -5 | lowercase + underscore | `c_5` |
+| 12-23 | -4 | lowercase + underscore | `c_4` |
+| 24-35 | -3 | lowercase + underscore | `c_3` |
+| 36-47 | -2 | lowercase + underscore | `c_2` = note 36 |
+| 48-59 | -1 | lowercase + underscore | `c_1` |
+| 60-71 | 0 | uppercase + dash | `C-0` = note 60 |
+| 72-83 | 1 | uppercase + dash | `C-1` |
+| ... | ... | ... | ... |
+| 144-155 | 7 | uppercase + dash | `G-7` = note 151 |
+| 156-167 | 8 | uppercase + dash | `C-8` |
+| 168-179 | 9 | uppercase + dash | `C-9` |
+
+**Key conversions:**
+- MIDI note 60 (middle C) ≈ Furnace `C-4` (note 108)
+- `c_2` (note 36) is a very low "trigger note" for drums
+- `G-7` (note 151) is used for cymbal/hi-hat high noise
+
+### PMDWin Tom Frequencies
+
+From PMDWin `table.cpp`, the SSG drum definitions use period values:
+
+| Drum | Period (initial) | Approx. Frequency | Sweep |
+|------|------------------|-------------------|-------|
+| Low Tom | 700 | ~160 Hz (E-3) | Down to ~124 Hz |
+| Mid Tom | 500 | ~224 Hz (A-3) | Down to ~167 Hz |
+| High Tom | 300 | ~373 Hz (F#4) | Down to ~250 Hz |
+
+SSG frequency formula: `Freq = 1789772.5 / (16 × Period)`
+
+For drums in Furnace, the pattern note is just a "trigger" - the instrument's arpeggio/pitch macros control the actual sound.
+
+---
+
 ## Furnace Effect Mapping
 
 | PMD Feature | Furnace Effect | Notes |
