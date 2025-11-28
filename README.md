@@ -1,11 +1,17 @@
-# PMD to Furnace Converter
+# PMD/MDT to Furnace Converter
 
-Converts compiled PMD (Professional Music Driver) `.M` files to Furnace Tracker `.fur` modules.
+Converts compiled PMD (Professional Music Driver) `.M` files and MDT (MDRV2) `.MDT` files to Furnace Tracker `.fur` modules.
 
 ## Usage
 
+### PMD Conversion
 ```bash
 python pmd2furnace.py input.M [output.fur]
+```
+
+### MDT Conversion (Touhou 1)
+```bash
+python mdt2furnace.py input.MDT [output.fur]
 ```
 
 If no output file is specified, it will use the input filename with `.fur` extension.
@@ -116,10 +122,48 @@ Currently creates Furnace instruments with volume macros, but the timing calcula
 - Python 3.6+
 - No external packages required
 
+---
+
+# MDT (MDRV2) Support
+
+MDT is the music driver used in Touhou 1 (Highly Responsive to Prayers).
+
+## MDT Features
+
+### ✅ Fully Implemented
+
+| Feature | MDT Command | Furnace Equivalent |
+|---------|-------------|-------------------|
+| FM Notes | `cdefgab` | Note data |
+| SSG Notes | `cdefgab` | Note data |
+| FM Instruments | `@` | FM (OPN) instruments |
+| Volume | `V`, `@V` | Volume column |
+| Tempo | `t` | Tick rate |
+| Loops | `[]`, `\|:\|`, `[:]` | Expanded during conversion |
+
+### ⚠️ Partially Implemented
+
+| Feature | MDT Command | Status |
+|---------|-------------|--------|
+| SSG Envelopes | `P` | Parsed, needs instrument creation |
+| LFO | `S`, `SA`, `SH` | Parsed, not converted |
+| Portamento | `()` | Parsed, not converted |
+
+### Key Differences from PMD
+
+| Feature | PMD | MDT |
+|---------|-----|-----|
+| Whole note | 96 ticks | 192 ticks |
+| SSG Drums | Yes (K/R channels) | No |
+| Rhythm | ADPCM-A or SSG drums | OPNA RSS only |
+| Macros | Limited | Full subroutine support |
+| Loop syntax | `[]` only | `[]`, `\|:\|`, `[:]` |
+
 ## References
 
 - [PMD Effects Commands (BotB Lyceum)](https://battleofthebits.com/lyceum/View/Professional%20Music%20Driver%20Effects%20Commands)
 - [PMD MML Manual](PMDMML_EN.MAN.htm)
+- [MDRV2 Documentation](https://en.touhouwiki.net/wiki/User:Mami/Music_Dev/Mdrv2/Md2mml)
 - [Furnace Documentation](furnace/doc/)
 - [ValleyBell's PMD Format Documentation](https://raw.githubusercontent.com/ValleyBell/MidiConverters/master/pmd_SeqFormat.txt)
 
@@ -128,6 +172,7 @@ Currently creates Furnace instruments with volume macros, but the timing calcula
 - `pmd2mml/` - C tool to decompile .M files back to MML source
 - `PMDDotNET/` - C# PMD player/compiler (reference implementation)
 - `pmdmini/` - C PMD playback library
+- `MDTParsingTools/` - Python MDT parser/decompiler
 
 ## License
 
