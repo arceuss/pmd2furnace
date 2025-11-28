@@ -2807,6 +2807,11 @@ class FurnaceBuilder:
 
 def main():
     import sys
+    import io
+    
+    # Set stdout to UTF-8 to handle Japanese characters
+    if sys.stdout.encoding != 'utf-8':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     
     if len(sys.argv) < 2:
         print("PMD to Furnace Converter")
@@ -2814,9 +2819,9 @@ def main():
         print("\nConverts compiled PMD .M files to Furnace .fur modules.")
         sys.exit(1)
     
-    input_file = sys.argv[1]
+    input_file = sys.argv[1].strip('"')  # Remove quotes if present
     if len(sys.argv) >= 3:
-        output_file = sys.argv[2]
+        output_file = sys.argv[2].strip('"')  # Remove quotes if present
     else:
         output_file = Path(input_file).stem + '.fur'
     
