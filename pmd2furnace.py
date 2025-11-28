@@ -2012,9 +2012,9 @@ class FurnaceBuilder:
                 # Store note with current transpose, volume, and effects
                 note_effects = list(pending_effects)  # Copy pending effects
                 
-                # Stop pitch slide from previous note if active
+                # Stop pitch slide from previous portamento
                 if pitch_slide_active and not event.is_rest:
-                    note_effects.append((0xE2, 0x00))  # E200 = stop slide
+                    note_effects.append((0xE1, 0x00))  # E100 = stop slide
                     pitch_slide_active = False
                 
                 # Detune is tracked separately - will be added only when it changes
@@ -2200,7 +2200,13 @@ class FurnaceBuilder:
                         current_qdatb = event.params[0]
                     elif event.cmd == 0xDA and len(event.params) >= 3:  # Portamento { }
                         # Params: [start_note, end_note, duration]
-                        # Each note byte: high nibble = octave, low nibble = note (0-11)
+                        # PMD portamento: smooth pitch slide from START to END over duration
+                        # 
+                        # Furnace approach: Use E1xy (slide up) or E2xy (slide down)
+                        # - Play the START note (transpose applied separately)
+                        # - Add E1xy or E2xy to slide toward END
+                        # - x = speed (1-F), y = semitones to slide (1-F)
+                        #
                         start_byte = event.params[0]
                         end_byte = event.params[1]
                         duration = event.params[2]
@@ -2211,38 +2217,39 @@ class FurnaceBuilder:
                         end_note_val = end_byte & 0x0F
                         
                         # Calculate semitone difference for slide direction
+                        # Transpose doesn't affect the difference since it's applied equally
                         start_semitones = start_octave * 12 + start_note_val
                         end_semitones = end_octave * 12 + end_note_val
                         semitone_diff = end_semitones - start_semitones
                         
-                        # Calculate slide: use E1xy (slide up) or E2xy (slide down)
-                        # x = speed (1-F), y = semitones (1-F)
                         porta_effects = list(pending_effects)
-                        semitones = min(15, abs(semitone_diff))  # Max 15 semitones for y nibble
-                        # Speed: duration/3 = rows (at TICKS_PER_ROW=3), we want to complete slide in that time
-                        # Higher speed = faster. For 4 rows and 3 semitones, speed ~4-8 works
-                        rows = max(1, duration // 3)
-                        speed = max(1, min(15, 32 // rows))  # Inverse: more rows = slower speed
                         
-                        if semitone_diff < 0:
-                            # Slide down - use E2xy
-                            porta_effects.append((0xE2, (speed << 4) | semitones))
-                        elif semitone_diff > 0:
-                            # Slide up - use E1xy
-                            porta_effects.append((0xE1, (speed << 4) | semitones))
+                        if semitone_diff != 0:
+                            semitones = min(15, abs(semitone_diff))  # Max 15 for y nibble
+                            
+                            # Calculate speed: need to cover 'semitones' in 'duration' ticks
+                            # User testing: E227 (speed 2) works for 7 semitones in 3 ticks
+                            # Formula: speed = semitones / duration (integer division)
+                            speed = max(1, min(15, semitones // max(1, duration)))
+                            
+                            if semitone_diff > 0:
+                                # Slide UP - use E1xy
+                                porta_effects.append((0xE1, (speed << 4) | semitones))
+                            else:
+                                # Slide DOWN - use E2xy
+                                porta_effects.append((0xE2, (speed << 4) | semitones))
+                        
+                        # Always play the START note (where the slide begins)
+                        porta_note = PMDNote(note=start_note_val, octave=start_octave, length=duration)
                         
                         if tie_active:
-                            # Tied portamento - just add effect without a new note
-                            # Create a "command" entry with the slide effect at this tick position
-                            # We'll handle this by adding a special marker
+                            # Tied portamento - slide continues from previous pitch
                             events_with_ticks.append((tick_pos, 'SLIDE_EFFECT', 0, None, porta_effects))
                             tie_active = False
                         else:
-                            # Non-tied portamento - create a note with the slide effect
-                            porta_note = PMDNote(note=start_note_val, octave=start_octave, length=duration)
                             events_with_ticks.append((tick_pos, porta_note, current_transpose + current_master, current_volume, porta_effects))
                         
-                        pitch_slide_active = True  # Mark that we need to stop slide on next note
+                        pitch_slide_active = True  # Mark to stop slide on next note
                         tick_pos += duration
                         pending_effects = []
                         event_index += 1
