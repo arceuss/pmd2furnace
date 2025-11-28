@@ -147,9 +147,9 @@ If you need to work with Touhou 1 music, consider using [MDTParsingTools](https:
 
 ## Useful External Tools
 
-- [pmd2mml](https://github.com/loveemu/pmd2mml) - Decompile .M files back to MML source
+- [pmd2mml](https://github.com/Blargzargo/pmd2mml) - Decompile .M files back to MML source
 - [PMDDotNET](https://github.com/kuma4649/PMDDotNET) - C# PMD player/compiler
-- [MDTParsingTools](https://github.com/OPNA2608/MDTParsingTools) - Python MDT parser/decompiler
+- [MDTParsingTools](https://github.com/Lmocinemod/MDTParsingTools) - Python MDT parser/decompiler
 
 ## License
 
