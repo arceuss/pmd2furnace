@@ -2054,6 +2054,7 @@ class FurnaceBuilder:
         pending_effects = []   # Effects to apply to next note
         tie_active = False     # Track if tie (&) is active for portamento
         pitch_slide_active = False  # Track if we need to stop pitch slide
+        current_tpq = 75  # Current ticks per quarter (default)
         # Gate time: qdata = ticks before note end to keyoff (0 = full length, higher = more staccato)
         current_qdata = 0  # Direct q value (ticks to cut from end)
         current_qdatb = 0  # Q percentage value (0-8, where gate = length * Q / 8)
@@ -2253,10 +2254,17 @@ class FurnaceBuilder:
                         if len(event.params) >= 2 and event.params[0] == 0xFF:
                             # Set ticks per quarter - this affects tempo inversely
                             # Higher TPQ = slower tempo
-                            new_tpq = event.params[1]
+                            current_tpq = event.params[1]
                             # Use virtual tempo: ratio = 75/new_tpq
                             tempo_fx.append((0xFD, 75))
-                            tempo_fx.append((0xFE, new_tpq))
+                            tempo_fx.append((0xFE, current_tpq))
+                        elif len(event.params) >= 2 and event.params[0] == 0xFD:
+                            # Add to ticks per quarter - gradual tempo change
+                            delta = event.params[1]
+                            delta = delta if delta < 128 else delta - 256  # Signed
+                            current_tpq = max(1, min(255, current_tpq + delta))
+                            tempo_fx.append((0xFD, 75))
+                            tempo_fx.append((0xFE, current_tpq))
                         elif len(event.params) >= 2 and event.params[0] == 0xFE:
                             # Add to tempo - relative change (skip for now)
                             pass
