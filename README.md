@@ -140,6 +140,7 @@ If you need to work with Touhou 1 music, consider using [MDTParsingTools](https:
 
 - [PMD Effects Commands (BotB Lyceum)](https://battleofthebits.com/lyceum/View/Professional%20Music%20Driver%20Effects%20Commands)
 - [PMD MML Manual (pigu-a)](https://pigu-a.github.io/pmddocs/pmdmml.htm)
+- [PMDWin Source Code (C60)](http://c60.la.coocan.jp/download.html) - Official PMDWin player/DLL source
 - [MDRV2 Documentation](https://en.touhouwiki.net/wiki/User:Mami/Music_Dev/Mdrv2/Md2mml)
 - [Furnace Tracker](https://github.com/tildearrow/furnace)
 - [ValleyBell's PMD Format Documentation](https://raw.githubusercontent.com/ValleyBell/MidiConverters/master/pmd_SeqFormat.txt)
