@@ -29,9 +29,8 @@ def pack_long(x): return struct.pack('<L', x)
 def pack_qlong(x): return struct.pack('<Q', x)
 def pack_float(x): return struct.pack('<f', x)
 def pack_string(x):
-    """Pack a string with length prefix (Furnace format)"""
-    encoded = x.encode('utf-8')
-    return pack_short(len(encoded)) + encoded
+    """Pack a null-terminated UTF-8 string (Furnace format)"""
+    return x.encode('utf-8') + b'\x00'
 
 def bl_length(byteslist):
     return sum(len(x) for x in byteslist)
