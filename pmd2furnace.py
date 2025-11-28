@@ -603,6 +603,7 @@ class FurnaceBuilder:
         self.drum_instruments = {}  # Maps drum value -> instrument index
         self.adpcma_instrument_idx = None  # Index of dummy ADPCM-A instrument for rhythm
         self.tempo_changes = []  # List of (tick, [(effect, value), ...]) for tempo changes
+        self.last_content_tick = 0  # Track the last tick with actual content
     
     def _make_entry(self, note=None, ins=None, vol=None, fx=None) -> bytes:
         """Create a pattern entry"""
@@ -2494,6 +2495,8 @@ class FurnaceBuilder:
                 pending_ins = None
                 pending_vol = None
                 last_row = row
+                # Track last content tick for loop jump placement
+                self.last_content_tick = max(self.last_content_tick, tick_pos)
             
             elif event == 'SLIDE_EFFECT':
                 # Tied portamento - add just the slide effect without a note
@@ -2705,29 +2708,43 @@ class FurnaceBuilder:
                 empty_pat = self._make_pattern(ch_idx, idx, b'\xFF')
                 self.patterns[ch_idx].append(empty_pat)
         
-        # Add loop jump (0Bxx) at the end of the last pattern
+        # Add loop jump (0Bxx) where the song content actually ends
         # Use ADPCM-B channel (15) which is usually empty, to avoid overwriting notes
         if self.loop_point_order is not None and self.order_count > 0:
             loop_channel = 15  # ADPCM-B channel - usually empty
-            last_pat_idx = self.order_count - 1
             
-            # Create a pattern with just the loop jump effect on the last row
+            # Calculate the row where content ends
+            TICKS_PER_ROW = 3
+            last_content_row = self.last_content_tick // TICKS_PER_ROW
+            target_pattern = last_content_row // self.pattern_length
+            row_in_pattern = last_content_row % self.pattern_length
+            
+            # Make sure we don't exceed order count
+            if target_pattern >= self.order_count:
+                target_pattern = self.order_count - 1
+                row_in_pattern = self.pattern_length - 1
+            
+            # Create a pattern with the loop jump at the correct row
             loop_jump_fx = [(0x0B, self.loop_point_order)]
             loop_data = bytearray()
-            # Skip to last row
-            if self.pattern_length > 1:
-                self._write_skip(loop_data, self.pattern_length - 1)
+            # Skip to the target row
+            if row_in_pattern > 0:
+                self._write_skip(loop_data, row_in_pattern)
             # Add an empty entry with the loop jump effect
             loop_data += self._make_entry(fx=loop_jump_fx)
+            # Fill remaining rows
+            remaining = self.pattern_length - row_in_pattern - 1
+            if remaining > 0:
+                self._write_skip(loop_data, remaining)
             loop_data += b'\xFF'
             
             # Replace or add the pattern on the loop channel
-            while len(self.patterns[loop_channel]) <= last_pat_idx:
+            while len(self.patterns[loop_channel]) <= target_pattern:
                 idx = len(self.patterns[loop_channel])
                 empty_pat = self._make_pattern(loop_channel, idx, b'\xFF')
                 self.patterns[loop_channel].append(empty_pat)
             
-            self.patterns[loop_channel][last_pat_idx] = self._make_pattern(loop_channel, last_pat_idx, bytes(loop_data))
+            self.patterns[loop_channel][target_pattern] = self._make_pattern(loop_channel, target_pattern, bytes(loop_data))
             # Make sure we have enough effect columns
             self.effects_count[loop_channel] = max(self.effects_count[loop_channel], 1)
         
