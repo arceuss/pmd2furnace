@@ -412,98 +412,129 @@ Example: `81 01 06` = drum @257 (0x0101), length 6 ticks
 
 ---
 
-## Binary Command Reference
+## Complete Command Reference
 
 **Source:** pmd_SeqFormat.txt (PMDWin 0.36)
 
-### Implemented Commands ✅
+Total: ~80 commands. **21 implemented** (26%), ~60 parsed but not converted.
+
+### ✅ Implemented Commands (21)
 
 | Byte | MML | Params | Description | Furnace Mapping |
 |------|-----|--------|-------------|-----------------|
-| 0xFF | @ | 1 | Set instrument | Instrument change |
-| 0xFE | q | 1+ | Gate time (ticks before keyoff) | FCxx effect |
-| 0xFD | V | 1 | Set volume (00=silent, 7F/0F=max) | Volume column |
-| 0xFC | t/T | 1+ | Set tempo (sub-cmds: FD/FE/FF) | Tempo (global) |
-| 0xFB | & | 0 | Tie/Hold | Note continuation |
-| 0xFA | D | 2 | Set detune (signed 16-bit) | E5xx (detune) |
-| 0xF9 | [ | 2 | Loop start | Pattern loop |
-| 0xF8 | ] | 4 | Loop end (tt cc oooo) | Pattern loop |
-| 0xF7 | : | 2 | Loop escape/break | Pattern loop exit |
-| 0xF6 | L | 0 | Master loop start | 0Bxx (song loop) |
-| 0xF5 | _ | 1 | Set transposition | Note transpose |
-| 0xF4 | ) | 0 | Volume up (+3dB) | Volume change |
-| 0xF3 | ( | 0 | Volume down (-3dB) | Volume change |
-| 0xF0 | E | 4 | PSG envelope (AR,DR,SR,RR) | SSG volume macro |
-| 0xEC | p | 1 | Set panning (0=off,1=R,2=L,3=C) | 08xy (pan) |
-| 0xEB | \r | 1 | OPNA rhythm key on | ADPCM-A notes |
-| 0xE9 | \< | 1 | OPNA rhythm panning | 08xy on ADPCM-A |
-| 0xE7 | _~ | 1 | Relative transpose (add) | Note transpose |
-| 0xDA | {} | 3 | Portamento (from,to,len) | E1xy/E2xy (slide) |
-| 0xC4 | Q | 1 | Gate time % (0-8, len*Q/8) | FCxx effect |
+| `FF` | `@` | 1 | Set instrument | Instrument change |
+| `FE` | `q` | 1 | Gate time (ticks before keyoff) | FCxx effect |
+| `FD` | `V` | 1 | Set volume (00=silent, 7F/0F=max) | Volume column |
+| `FC` | `t/T` | 1+ | Set tempo (sub-cmds: FD/FE/FF) | FDxx/FExx (virtual tempo) |
+| `FB` | `&` | 0 | Tie/Hold | Note continuation |
+| `FA` | `D` | 2 | Set detune (signed 16-bit) | E5xx (detune) |
+| `F9` | `[` | 2 | Loop start | Loop expansion |
+| `F8` | `]` | 4 | Loop end (tt cc oooo) | Loop expansion |
+| `F7` | `:` | 2 | Loop escape/break | Loop expansion |
+| `F6` | `L` | 0 | Master loop start | 0Bxx (song loop) |
+| `F5` | `_` | 1 | Set transposition | Note transpose |
+| `F4` | `)` | 0 | Volume up (+3dB) | Volume change |
+| `F3` | `(` | 0 | Volume down (-3dB) | Volume change |
+| `F0` | `E` | 4 | PSG envelope (AL,DD,SR,RR) | SSG volume macro |
+| `EC` | `p` | 1 | Set panning (0=off,1=R,2=L,3=C) | 08xy (pan) |
+| `EB` | `\r` | 1 | OPNA rhythm key on | ADPCM-A notes |
+| `E9` | `\<` | 1 | OPNA rhythm panning | 08xy on ADPCM-A |
+| `DA` | `{}` | 3 | Portamento (from,to,len) | E1xy/E2xy (slide) |
+| `C4` | `Q` | 1 | Gate time % (len×Q÷256) | FCxx effect |
+| `B2` | `_M` | 1 | Secondary transpose | Note transpose |
 
-### Parsed but Not Converted ⚠️
+### ⚠️ Parsed but Not Converted (~60)
 
-| Byte | MML | Params | Description | Notes |
-|------|-----|--------|-------------|-------|
-| 0xF2 | M | 4 | LFO/Vibrato (delay,speed,depthA,depthB) | Parsed, not output |
-| 0xF1 | * | 1 | LFO switch (enable/disable) | Parsed, not output |
-| 0xEF | y | 2 | Direct OPN register write | Parsed, not output |
-| 0xEE | w | 1 | PSG noise frequency | Parsed, not output |
-| 0xED | P | 1 | PSG tone/noise mask | Parsed, not output |
-| 0xEA | \v | 1 | OPNA rhythm volume | Parsed, not output |
-| 0xE8 | \V | 1 | OPNA rhythm master volume | Parsed, not output |
-| 0xE6 | | 1 | OPNA rhythm volume add | Parsed, not output |
-| 0xE5 | | 2 | OPNA rhythm volume add 2 | Parsed, not output |
-| 0xE4 | H | 1 | Hardware LFO delay | Parsed, not output |
-| 0xE3 | )n | 1 | Volume up by N | Parsed, not output |
-| 0xE2 | (n | 1 | Volume down by N | Parsed, not output |
-| 0xE1 | | 1 | Hardware LFO set | Parsed, not output |
-| 0xE0 | | 1 | Hardware LFO speed (reg 22) | Parsed, not output |
-| 0xDF | C | 1 | Set ZENLEN | Parsed, affects timing |
-| 0xDE | | 1 | Fine volume up (next note) | Parsed, not output |
-| 0xDD | | 1 | Fine volume down (next note) | Parsed, not output |
-| 0xDC | | 1 | Set status byte | Parsed, not output |
-| 0xDB | | 1 | Add to status byte | Parsed, not output |
-| 0xD9 | | 1 | HLFO waveform | Parsed, not output |
-| 0xD8 | | 1 | HLFO AMD/PMD | Parsed, not output |
-| 0xD7 | | 1 | HLFO frequency | Parsed, not output |
-| 0xD6 | | 2 | MD set | Parsed, not output |
-| 0xD5 | | 2 | Detune add | Parsed, not output |
-| 0xD4 | | 1 | SSG effect | Parsed, not output |
-| 0xD3 | | 1 | FM effect | Parsed, not output |
-| 0xD2 | | 1 | Fade out | Parsed, not output |
-| 0xD1 | | 1 | (Unused) | Parsed, ignored |
-| 0xD0 | | 1 | Noise freq add | Parsed, not output |
-| 0xCF | s | 1 | FM slot mask | Parsed, not output |
-| 0xCE | | 6 | Unknown | Parsed, not output |
-| 0xCD | | 5 | SSG envelope extended | Parsed, not output |
-| 0xCC | | 1 | Detune extend mode | Parsed, not output |
-| 0xCB | MW | 1 | LFO waveform | Parsed, not output |
-| 0xCA | | 1 | Extend mode bit 1 | Parsed, not output |
-| 0xC9 | | 1 | Extend mode bit 2 | Parsed, not output |
-| 0xC8 | | 3 | Slot detune | Parsed, not output |
-| 0xC7 | | 3 | Slot detune 2 | Parsed, not output |
-| 0xC6 | | 6 | FM3 extended mode init | Parsed, not output |
-| 0xC5 | | 1 | Volume mask | Parsed, not output |
-| 0xC3 | | 2 | Pan extended | Parsed, not output |
-| 0xC2 | MD | 1 | LFO delay | Parsed, not output |
-| 0xC1 | | 0 | Slur/legato ignore keyoff | Parsed, not output |
-| 0xC0 | | 1+ | Part mask | Parsed, not output |
-| 0xBF | MB | 4 | LFO set B | Parsed, not output |
-| 0xBE | | 1 | LFO switch B | Parsed, not output |
-| 0xBD | | 2 | MD set B | Parsed, not output |
-| 0xBC | | 1 | LFO wave B | Parsed, not output |
-| 0xBB | | 1 | Extend mode bit 5 | Parsed, not output |
-| 0xBA | | 1 | Volume mask B | Parsed, not output |
-| 0xB9 | | 1 | LFO delay B | Parsed, not output |
-| 0xB8 | | 2 | TL set | Parsed, not output |
-| 0xB7 | | 1 | MD count | Parsed, not output |
-| 0xB6 | | 1 | FB set | Parsed, not output |
-| 0xB5 | | 2 | Slot delay | Parsed, not output |
-| 0xB4 | | 16 | PPZ extend | Parsed, not output |
-| 0xB3 | q2 | 1 | Gate minimum | Parsed, not output |
-| 0xB2 | | 1 | Secondary transpose | Parsed, not output |
-| 0xB1 | q3 | 1 | Gate randomizer range | Parsed, not output |
+#### LFO / Vibrato Commands
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `F2` | `M` | 4 | Software LFO (delay,speed,depthA,depthB) |
+| `F1` | `*` | 1 | LFO switch (enable/disable) |
+| `E4` | `H` | 1 | Hardware LFO delay |
+| `E1` | | 1 | Hardware LFO AM/FM (reg B4) |
+| `E0` | | 1 | Hardware LFO speed (reg 22) |
+| `CB` | `MW` | 1 | LFO waveform select |
+| `C2` | `MD` | 1 | LFO delay |
+| `BF` | `MB` | 4 | LFO set B (secondary LFO) |
+| `BE` | | 1 | LFO switch B |
+| `BD` | | 2 | MD set B |
+| `BC` | | 1 | LFO wave B |
+| `B9` | | 1 | LFO delay B |
+| `B7` | | 1 | MD count |
+| `D9` | | 1 | HLFO waveform |
+| `D8` | | 1 | HLFO AMD/PMD |
+| `D7` | | 1 | HLFO frequency |
+| `D6` | | 2 | MD set |
+
+#### Volume Commands
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `E3` | `)n` | 1 | Volume up by N |
+| `E2` | `(n` | 1 | Volume down by N |
+| `DE` | | 1 | Fine volume up (next note only) |
+| `DD` | | 1 | Fine volume down (next note only) |
+| `C5` | | 1 | Volume mask |
+| `BA` | | 1 | Volume mask B |
+
+#### OPNA Rhythm Commands
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `EA` | `\v` | 1 | Rhythm channel volume |
+| `E8` | `\V` | 1 | Rhythm master volume |
+| `E6` | | 1 | Rhythm volume add |
+| `E5` | | 1 | Rhythm volume add (per-channel) |
+
+#### PSG/SSG Commands
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `EE` | `w` | 1 | PSG noise frequency |
+| `ED` | `P` | 1 | PSG tone/noise mask (reg 07) |
+| `D4` | | 1 | SSG effect |
+| `D3` | | 1 | FM effect |
+| `D0` | | 1 | Noise freq add |
+| `CD` | | 5 | SSG envelope extended format |
+
+#### FM-Specific Commands
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `EF` | `y` | 2 | Direct OPN register write |
+| `CF` | `s` | 1 | FM slot mask |
+| `C8` | | 3 | Slot detune |
+| `C7` | | 3 | Slot detune 2 |
+| `C6` | | 6 | FM3 extended mode init |
+| `B8` | | 2 | TL set |
+| `B6` | | 1 | FB set |
+| `B5` | | 2 | Slot delay |
+
+#### Gate Time / Articulation
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `B3` | `q2` | 1 | Gate minimum (qdat2) |
+| `B1` | `q3` | 1 | Gate randomizer range (qdat3) |
+| `C1` | | 0 | Slur/legato (ignore keyoff) |
+
+#### Extend Mode Flags
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `CC` | | 1 | Extend mode bit 0 |
+| `CA` | | 1 | Extend mode bit 1 |
+| `C9` | | 1 | Extend mode bit 2 |
+| `BB` | | 1 | Extend mode bit 5 |
+
+#### Misc Commands
+| Byte | MML | Params | Description |
+|------|-----|--------|-------------|
+| `DF` | `C` | 1 | Set ZENLEN (ticks per whole note) |
+| `DC` | | 1 | Set status byte |
+| `DB` | | 1 | Add to status byte |
+| `D5` | | 2 | Detune add |
+| `D2` | | 1 | Fade out |
+| `D1` | | 1 | (Unused/ignored) |
+| `CE` | | 6 | Unknown |
+| `C3` | | 2 | Pan extended |
+| `C0` | | 1+ | Part mask (mute channel) |
+| `B4` | | 16 | PPZ extend |
+| `E7` | `_~` | 1 | Relative transpose (add) |
 
 ### Special Values
 
