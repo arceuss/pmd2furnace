@@ -30,7 +30,9 @@ def pack_qlong(x): return struct.pack('<Q', x)
 def pack_float(x): return struct.pack('<f', x)
 def pack_string(x):
     """Pack a null-terminated UTF-8 string (Furnace format)"""
-    return x.encode('utf-8') + b'\x00'
+    # Strip any embedded null characters to prevent malformed strings
+    clean = x.replace('\x00', '')
+    return clean.encode('utf-8') + b'\x00'
 
 def bl_length(byteslist):
     return sum(len(x) for x in byteslist)
