@@ -2205,11 +2205,24 @@ class FurnaceBuilder:
                 if current_qdatb > 0:
                     qdat += (event.length * current_qdatb) // 8
                 
-                # Gate time for FM channels
-                # Note: We intentionally don't use FCxx (Note Release) for FM because it causes
-                # weird fade in/out artifacts when notes are close together. The FM envelope
-                # naturally handles note transitions better without forcing release phase.
-                cut_tick_offset = None  # Not used for FM anymore
+                # Calculate release timing for FCxx effect (FM channels only)
+                # qdat = ticks before note end to trigger keyoff
+                cut_tick_offset = None  # Tick offset within row for FCxx effect
+                
+                if not event.is_rest and channel.channel_type == 'fm' and qdat > 0 and qdat < event.length:
+                    # Calculate when cut happens relative to note start
+                    ticks_until_cut = event.length - qdat
+                    note_row = tick_pos // TICKS_PER_ROW
+                    cut_tick = tick_pos + ticks_until_cut
+                    cut_row = cut_tick // TICKS_PER_ROW
+                    cut_tick_in_row = cut_tick % TICKS_PER_ROW
+                    
+                    if cut_row == note_row:
+                        # Release is in the same row as note - use FCxx on the note
+                        cut_tick_offset = cut_tick_in_row
+                    else:
+                        # Cut is on a different row - add NOTE_OFF event with tick offset
+                        events_with_ticks.append((cut_tick, 'NOTE_OFF', 0, None, [], None, 0, cut_tick_in_row))
                 
                 events_with_ticks.append((tick_pos, event, current_transpose + current_master, current_volume, note_effects, ssg_env_for_note, qdat, cut_tick_offset))
                 
@@ -2422,14 +2435,8 @@ class FurnaceBuilder:
         # Second pass: place notes at correct row positions
         last_row = -1
         
-        # For FM channels, add envelope hard reset effect (30xx) at the start
-        # This fixes weird fade in/out artifacts by ensuring envelope resets properly
-        if channel.channel_type == 'fm' and events_with_ticks:
-            # Add 3001 (enable hard envelope reset) on first row
-            first_entry = self._make_entry(fx=[(0x30, 0x01)])
-            current_pattern_data += first_entry
-            current_row_in_pattern += 1
-            self.effects_count[fur_channel] = max(self.effects_count[fur_channel], 1)
+        # For FM channels, add envelope hard reset effect (30xx) to the first note
+        fm_hard_reset_added = False
         for item in events_with_ticks:
             # Unpack with cut_tick_offset for FCxx effects
             cut_tick_offset = None
@@ -2537,6 +2544,11 @@ class FurnaceBuilder:
                 
                 # Build effects list
                 fx_list = list(note_effects) if note_effects else []
+                
+                # Add 3001 (envelope hard reset) to first FM note to fix fade artifacts
+                if channel.channel_type == 'fm' and not fm_hard_reset_added:
+                    fx_list.insert(0, (0x30, 0x01))
+                    fm_hard_reset_added = True
                 
                 # Add FCxx (note release) effect for FM channels with same-row gate time
                 if cut_tick_offset is not None and channel.channel_type == 'fm':
