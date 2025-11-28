@@ -1309,7 +1309,7 @@ class FurnaceBuilder:
             9: {  # Crash Cymbal - high pitch G-7 (151)
                 'name': 'Crash Cymbal',
                 'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
-                'arp_fixed': [151],
+                'arp_fixed': [91],
                 'arp_rel': [0],
                 'duty': list(range(32)),  # 0-31 sweep
                 'wave': [3] * 32,
@@ -1317,7 +1317,7 @@ class FurnaceBuilder:
             7: {  # Hi-Hat Closed - short high noise G-7 (151)
                 'name': 'Hi-Hat Closed',
                 'vol': [15, 10, 5, 0],
-                'arp_fixed': [151],
+                'arp_fixed': [91],
                 'arp_rel': [0],
                 'duty': [31, 30],
                 'wave': [3, 3],
@@ -1325,7 +1325,7 @@ class FurnaceBuilder:
             8: {  # Hi-Hat Open - longer high noise G-7 (151)
                 'name': 'Hi-Hat Open',
                 'vol': [15, 15, 14, 14, 13, 13, 12, 12, 11, 11, 10, 10, 9, 9, 8, 8, 0],
-                'arp_fixed': [151],
+                'arp_fixed': [91],
                 'arp_rel': [0],
                 'duty': [31, 30],
                 'wave': [3, 3],
