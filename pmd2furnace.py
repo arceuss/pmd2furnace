@@ -1869,13 +1869,16 @@ class FurnaceBuilder:
         # Lowest set bit takes priority for SSG channel
         def get_drum_note_and_ins(drum_val):
             # Find lowest set bit to determine which SSG drum plays
+            # Cymbals/hi-hats need G-7 (note 91) to sound correct
+            CYMBAL_BITS = {7, 8, 9, 10}  # HH Closed, HH Open, Crash, Ride
+            
             for bit_idx in range(11):  # Bits 0-10
                 bit_mask = 1 << bit_idx
                 if drum_val & bit_mask:
                     # Map bit index to SSG drum instrument
                     ins = ssg_drum_map.get(bit_idx, ssg_drum_map.get(0, None))
-                    # Use fixed note - instrument macro controls the sound
-                    note = 36  # C-2
+                    # Use G-7 for cymbals/hi-hats, C-2 for others
+                    note = 91 if bit_idx in CYMBAL_BITS else 36
                     return note, ins
             # Fallback to bass drum
             return 36, ssg_drum_map.get(0, None)
