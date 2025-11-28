@@ -1303,9 +1303,9 @@ class FurnaceBuilder:
         # Process in order with global tempo_48 tracking
         # tempo_48 is PMD's friendly tempo value (higher = faster)
         # Formula: tempo_48 = 0x112C / (256 - TimerB)
-        # Default TimerB=200 gives tempo_48 ≈ 78
-        current_tempo_48 = 78  # Default
-        initial_tempo_48 = None  # Will be set by first tempo command
+        # Baseline denominator = 75 (standard reference for BPM calculation)
+        current_tempo_48 = 75  # Default
+        BASELINE_TEMPO = 75    # Fixed denominator for virtual tempo ratio
         
         for tick_pos, params in all_tempo_events:
             tempo_fx = []
@@ -1313,21 +1313,17 @@ class FurnaceBuilder:
             if len(params) >= 2 and params[0] == 0xFF:
                 # Set tempo_48 (t command) - higher value = faster
                 current_tempo_48 = params[1]
-                if initial_tempo_48 is None:
-                    initial_tempo_48 = current_tempo_48  # First setting becomes the base
-                # Virtual tempo: current/initial ratio
-                # Higher current = faster, so numerator = current, denominator = initial
+                # Virtual tempo: current/baseline ratio
+                # Higher current = faster, so numerator = current, denominator = baseline
                 tempo_fx.append((0xFD, current_tempo_48))
-                tempo_fx.append((0xFE, initial_tempo_48))
+                tempo_fx.append((0xFE, BASELINE_TEMPO))
             elif len(params) >= 2 and params[0] == 0xFD:
                 # Add to tempo_48 (t± command) - gradual tempo change
                 delta = params[1]
                 delta = delta if delta < 128 else delta - 256  # Signed
                 current_tempo_48 = max(18, min(255, current_tempo_48 + delta))
-                if initial_tempo_48 is None:
-                    initial_tempo_48 = 78  # Default (~200 Timer B)
                 tempo_fx.append((0xFD, current_tempo_48))
-                tempo_fx.append((0xFE, initial_tempo_48))
+                tempo_fx.append((0xFE, BASELINE_TEMPO))
             elif len(params) >= 2 and params[0] == 0xFE:
                 # Add to tempo - relative change (skip for now)
                 pass

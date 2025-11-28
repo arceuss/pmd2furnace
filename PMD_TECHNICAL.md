@@ -240,24 +240,29 @@ t-5      ; Subtract 5 → 58, even slower (FC FD FB, where FB = -5 signed)
 ### Furnace Virtual Tempo Mapping
 
 Furnace uses virtual tempo effects to scale playback speed:
-- `FDxx` = numerator
-- `FExx` = denominator  
+- `FDxx` = numerator (current tempo_48)
+- `FExx` = denominator (fixed baseline = 75)
 - Effective speed = base × (numerator / denominator)
 
 **Mapping strategy:**
 ```
-FD = current tempo_48   (numerator - changes)
-FE = initial tempo_48   (denominator - constant baseline)
+FD = current tempo_48   (numerator - changes with tempo commands)
+FE = 75                  (denominator - fixed baseline for BPM calculation)
 ```
 
-**Example sequence:**
+**Why 75?** This baseline gives correct BPM. For example, Bad Apple:
+- tempo_48 = 80 (from `t80` command)
+- Ratio = 80/75 = 1.067
+- Base Furnace tempo × 1.067 = correct 160 BPM (320 half-note)
+
+**Example sequence (Th02_04):**
 | Tick | Command | tempo_48 | Furnace FD/FE | Ratio |
 |------|---------|----------|---------------|-------|
-| 0 | `FC FF 72` | 72 | FD48 FE48 | 1.00 (base) |
-| 1896 | `FC FD +3` | 75 | FD4B FE48 | 1.04 (4% faster) |
-| 1920 | `FC FD -12` | 63 | FD3F FE48 | 0.88 (12% slower) |
-| 2088 | `FC FD -5` | 58 | FD3A FE48 | 0.81 (19% slower) |
-| 2208 | `FC FF 76` | 76 | FD4C FE48 | 1.06 (back to normal) |
+| 0 | `FC FF 72` | 72 | FD48 FE4B | 0.96 (4% slower) |
+| 1896 | `FC FD +3` | 75 | FD4B FE4B | 1.00 (base) |
+| 1920 | `FC FD -12` | 63 | FD3F FE4B | 0.84 (16% slower) |
+| 2088 | `FC FD -5` | 58 | FD3A FE4B | 0.77 (23% slower) |
+| 2208 | `FC FF 76` | 76 | FD4C FE4B | 1.01 (back to normal) |
 
 ### Timer B Hardware Details
 
