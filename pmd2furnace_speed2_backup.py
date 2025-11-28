@@ -1061,7 +1061,7 @@ class FurnaceBuilder:
                         channel_events[fur_ch].append((tick_pos, ins_idx))
         
         # Convert each ADPCM-A channel's events to patterns
-        TICKS_PER_ROW = 3
+        TICKS_PER_ROW = 2
         
         for fur_ch in range(9, 15):
             events_for_ch = channel_events.get(fur_ch, [])
@@ -1140,46 +1140,24 @@ class FurnaceBuilder:
         - Bit 4: TOM (Tom) -> Channel 13
         - Bit 5: RIM (Rim Shot) -> Channel 14
         - Bit 7: Key Off flag
-        
-        Also handles 0xE9 for rhythm panning:
-        - Format: (drum_index << 5) | pan_bits
-        - pan_bits: 0x01=Right, 0x02=Left, 0x03=Center
         """
         # OPNA rhythm bit -> Furnace channel
         opna_rhythm_map = {0: 9, 1: 10, 2: 11, 3: 12, 4: 13, 5: 14}
         
-        # PMD pan bits to Furnace 08xy effect
-        # 0x01=Right -> 08 0F, 0x02=Left -> 08 F0, 0x03=Center -> 08 FF
-        pan_to_furnace = {
-            0x01: (0x08, 0x0F),  # Right only
-            0x02: (0x08, 0xF0),  # Left only
-            0x03: (0x08, 0xFF),  # Center (both)
-            0x00: (0x08, 0xFF),  # Default to center
-        }
-        
-        # Collect rhythm events from all channels: (tick, pan_effect or None)
+        # Collect rhythm events from all channels
         channel_events = {9: [], 10: [], 11: [], 12: [], 13: [], 14: []}
         
-        # Track current pan state for each drum (0-5)
-        rhythm_pan = {0: None, 1: None, 2: None, 3: None, 4: None, 5: None}
-        
-        # Scan all channels for 0xEB (rhythm keyon) and 0xE9 (rhythm pan) commands
+        # Scan all channels for 0xEB commands
         for ch in self.pmd.channels:
+            if ch.channel_type not in ('fm', 'ssg', 'adpcm'):
+                continue
             
             tick = 0
             for event in ch.events:
                 if isinstance(event, PMDNote):
                     tick += event.length
                 elif isinstance(event, PMDCommand):
-                    if event.cmd == 0xE9 and event.params:
-                        # Rhythm panning: (drum_index << 5) | pan_bits
-                        pan_byte = event.params[0]
-                        drum_idx = (pan_byte >> 5) - 1  # 1-6 -> 0-5
-                        pan_bits = pan_byte & 0x03
-                        if 0 <= drum_idx <= 5:
-                            rhythm_pan[drum_idx] = pan_to_furnace.get(pan_bits, (0x08, 0xFF))
-                    
-                    elif event.cmd == 0xEB and event.params:
+                    if event.cmd == 0xEB and event.params:
                         rhythm_byte = event.params[0]
                         is_keyoff = bool(rhythm_byte & 0x80)
                         
@@ -1187,12 +1165,10 @@ class FurnaceBuilder:
                             if rhythm_byte & (1 << bit_idx):
                                 fur_ch = opna_rhythm_map[bit_idx]
                                 if not is_keyoff:
-                                    # Include current pan state with the event
-                                    pan_fx = rhythm_pan.get(bit_idx)
-                                    channel_events[fur_ch].append((tick, pan_fx))
+                                    channel_events[fur_ch].append(tick)
         
         # Convert to patterns
-        TICKS_PER_ROW = 3
+        TICKS_PER_ROW = 2
         
         for fur_ch in range(9, 15):
             events_for_ch = channel_events.get(fur_ch, [])
@@ -1202,23 +1178,15 @@ class FurnaceBuilder:
             # Get instrument for this channel
             ins_idx = self.adpcma_drum_map.get(fur_ch)
             
-            # Sort by tick and deduplicate (keep first pan value for each tick)
-            events_for_ch.sort(key=lambda x: x[0])
-            seen_ticks = set()
-            unique_events = []
-            for tick, pan_fx in events_for_ch:
-                if tick not in seen_ticks:
-                    seen_ticks.add(tick)
-                    unique_events.append((tick, pan_fx))
-            events_for_ch = unique_events
+            # Sort and deduplicate
+            events_for_ch = sorted(set(events_for_ch))
             
             current_pattern_data = bytearray()
             pattern_index = 0
             current_row_in_pattern = 0
             ins_written = False
-            last_pan = None
             
-            for tick_pos, pan_fx in events_for_ch:
+            for tick_pos in events_for_ch:
                 row = tick_pos // TICKS_PER_ROW
                 target_pattern = row // self.pattern_length
                 
@@ -1244,21 +1212,19 @@ class FurnaceBuilder:
                     self._write_skip(current_pattern_data, skip_rows)
                     current_row_in_pattern += skip_rows
                 
-                # Build effect list (pan effect if changed)
-                fx_list = []
-                if pan_fx is not None and pan_fx != last_pan:
-                    fx_list.append(pan_fx)
-                    last_pan = pan_fx
-                    self.effects_count[fur_ch] = max(self.effects_count[fur_ch], 1)
-                
-                # Write drum note with optional pan effect
+                # Write drum note
                 note = 60  # C-4 for ADPCM-A
-                ins_to_write = ins_idx if not ins_written else None
-                if ins_to_write is not None:
+                flags = 0x01  # Has note
+                
+                if ins_idx is not None and not ins_written:
+                    flags |= 0x02
                     ins_written = True
                 
-                entry = self._make_entry(note=note, ins=ins_to_write, fx=fx_list if fx_list else None)
-                current_pattern_data += entry
+                current_pattern_data.append(flags)
+                current_pattern_data.append(note)
+                if flags & 0x02:
+                    current_pattern_data.append(ins_idx)
+                
                 current_row_in_pattern += 1
             
             # Finish last pattern
@@ -1882,7 +1848,7 @@ class FurnaceBuilder:
         
         # Convert to SSG-I channel (8)
         fur_channel = 8
-        TICKS_PER_ROW = 3  # Match the main channel conversion
+        TICKS_PER_ROW = 2  # Match the main channel conversion
         max_patterns = 200
         
         current_pattern_data = bytearray()
@@ -1952,10 +1918,10 @@ class FurnaceBuilder:
         - 16th note = 6 ticks
         - 32nd note = 3 ticks
         
-        Furnace at speed 3: 1 row = 3 ticks (at 60Hz)
+        Furnace at speed 2: 1 row = 2 ticks (at 60Hz)
         This allows proper handling of 32nd notes.
         """
-        TICKS_PER_ROW = 3
+        TICKS_PER_ROW = 2
         
         current_tick = 0  # Current position in ticks
         current_pattern_data = bytearray()
@@ -2050,35 +2016,25 @@ class FurnaceBuilder:
                 if current_qdatb > 0:
                     qdat += (event.length * current_qdatb) // 8
                 
-                # Calculate cut timing for ECxx effect (FM channels only)
-                # qdat = ticks before note end to trigger keyoff
-                cut_tick_offset = None  # Tick offset within row for ECxx effect
+                events_with_ticks.append((tick_pos, event, current_transpose + current_master, current_volume, note_effects, ssg_env_for_note, qdat))
                 
-                if not event.is_rest and channel.channel_type == 'fm' and qdat > 0 and qdat < event.length:
-                    # Calculate when cut happens relative to note start
-                    ticks_until_cut = event.length - qdat
-                    note_row = tick_pos // TICKS_PER_ROW
-                    cut_tick = tick_pos + ticks_until_cut
-                    cut_row = cut_tick // TICKS_PER_ROW
-                    cut_tick_in_row = cut_tick % TICKS_PER_ROW
-                    
-                    if cut_row == note_row:
-                        # Cut is in the same row as note - use ECxx on the note
-                        cut_tick_offset = cut_tick_in_row
-                    else:
-                        # Cut is on a different row - add NOTE_OFF event with tick offset
-                        events_with_ticks.append((cut_tick, 'NOTE_OFF', 0, None, [], None, 0, cut_tick_in_row))
-                
-                events_with_ticks.append((tick_pos, event, current_transpose + current_master, current_volume, note_effects, ssg_env_for_note, qdat, cut_tick_offset))
-                
-                # SSG: always use NOTE_RELEASE for macro release (unchanged)
-                if not event.is_rest and channel.channel_type == 'ssg':
+                # Calculate release tick and add note off/release events
+                if not event.is_rest:
+                    # PMD: keyoff when (remaining_length <= qdat)
+                    # So release_tick = note_start + note_length - qdat
                     if qdat > 0 and qdat < event.length:
                         release_tick = tick_pos + event.length - qdat
                     else:
+                        # qdat = 0 means full length
                         release_tick = tick_pos + event.length
+                    
                     if release_tick > tick_pos:
-                        events_with_ticks.append((release_tick, 'NOTE_RELEASE', 0, None, [], None, 0, None))
+                        if channel.channel_type == 'ssg':
+                            # SSG: always use REL to trigger macro release phase
+                            events_with_ticks.append((release_tick, 'NOTE_RELEASE', 0, None, [], None, 0))
+                        elif qdat > 0:
+                            # FM/other: only add OFF if there's early gate time
+                            events_with_ticks.append((release_tick, 'NOTE_OFF', 0, None, [], None, 0))
                 
                 tick_pos += event.length
                 event_index += 1
@@ -2272,15 +2228,11 @@ class FurnaceBuilder:
         # Second pass: place notes at correct row positions
         last_row = -1
         for item in events_with_ticks:
-            # Unpack with cut_tick_offset for ECxx effects
-            cut_tick_offset = None
-            if len(item) == 8:
-                tick_pos, event, note_transpose, note_volume, note_effects, note_ssg_env, note_qdat, cut_tick_offset = item
-            elif len(item) == 7:
+            if len(item) == 7:
                 tick_pos, event, note_transpose, note_volume, note_effects, note_ssg_env, note_qdat = item
             elif len(item) == 6:
                 tick_pos, event, note_transpose, note_volume, note_effects, note_ssg_env = item
-                note_qdat = 0
+                note_qdat = 0  # Full length (no early keyoff)
             elif len(item) == 5:
                 tick_pos, event, note_transpose, note_volume, note_effects = item
                 note_ssg_env = None
@@ -2376,12 +2328,9 @@ class FurnaceBuilder:
                             vol_to_set = vol_value
                             last_vol = vol_value
                 
-                # Build effects list
+                # Gate time is now handled via NOTE_OFF/NOTE_RELEASE events
+                # No need for ECxx effects
                 fx_list = list(note_effects) if note_effects else []
-                
-                # Add ECxx (note cut) effect for FM channels with same-row gate time
-                if cut_tick_offset is not None and channel.channel_type == 'fm':
-                    fx_list.append((0xEC, cut_tick_offset))
                 
                 # Add effects if any
                 fx_to_set = fx_list if fx_list else None
@@ -2464,7 +2413,7 @@ class FurnaceBuilder:
                 if row == last_row:
                     continue
                 
-                # Use ECxx effect for precise note cut timing
+                # Write an OFF note (180) to cut the note (FM channels)
                 # Handle pattern boundaries and skips
                 while row >= (pattern_index + 1) * self.pattern_length:
                     rows_left = self.pattern_length - current_row_in_pattern
@@ -2484,13 +2433,11 @@ class FurnaceBuilder:
                     self._write_skip(current_pattern_data, skip_rows)
                     current_row_in_pattern += skip_rows
                 
-                # Use ECxx effect with tick offset for precise cut, otherwise use EC00
-                tick_offset = cut_tick_offset if cut_tick_offset is not None else 0
-                entry = self._make_entry(fx=[(0xEC, tick_offset)])
+                # Write OFF note (180) - note off/cut
+                entry = self._make_entry(note=FUR_NOTE_OFF)
                 current_pattern_data += entry
                 current_row_in_pattern += 1
                 last_row = row
-                self.effects_count[fur_channel] = max(self.effects_count[fur_channel], 1)
                 
             elif isinstance(event, PMDCommand):
                 if event.cmd == 0xFF and event.params:  # Instrument
@@ -2656,8 +2603,8 @@ class FurnaceBuilder:
             b'INFO',
             pack_long(0),
             pack_byte(0),   # time base
-            pack_byte(3),   # speed 1 (3 ticks per row)
-            pack_byte(3),   # speed 2
+            pack_byte(2),   # speed 1 (2 ticks per row for higher note fidelity)
+            pack_byte(2),   # speed 2
             pack_byte(1),   # arp speed
             pack_float(self.ticks_per_second),
             pack_short(self.pattern_length),
@@ -2721,7 +2668,7 @@ class FurnaceBuilder:
             pack_byte(1),     # auto patchbay
             pack_byte(0) * 8,
             pack_byte(1),     # speed pattern len
-            pack_byte(3),     # speed pattern (3 ticks per row)
+            pack_byte(2),     # speed pattern (2 ticks per row)
             pack_byte(0) * 15,
             pack_byte(0),     # groove count
             pack_long(0),     # ins asset dir
