@@ -602,6 +602,7 @@ class FurnaceBuilder:
         self.ssg_envelope_instruments = {}  # Maps (al, dd, sr, rr) -> instrument index
         self.drum_instruments = {}  # Maps drum value -> instrument index
         self.adpcma_instrument_idx = None  # Index of dummy ADPCM-A instrument for rhythm
+        self.tempo_changes = []  # List of (tick, [(effect, value), ...]) for tempo changes
     
     def _make_entry(self, note=None, ins=None, vol=None, fx=None) -> bytes:
         """Create a pattern entry"""
@@ -1270,6 +1271,68 @@ class FurnaceBuilder:
                 self.patterns[fur_ch].append(
                     self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
                 )
+    
+    def _tempo_to_adpcmb(self):
+        """Output tempo changes on ADPCM-B channel (15)
+        
+        Tempo changes collected during channel processing are output as
+        FDxx (numerator) and FExx (denominator) effects on channel 15.
+        """
+        if not self.tempo_changes:
+            return
+        
+        fur_ch = 15  # ADPCM-B channel
+        TICKS_PER_ROW = 3
+        
+        current_pattern_data = bytearray()
+        pattern_index = 0
+        current_row_in_pattern = 0
+        
+        for tick_pos, fx_list in sorted(self.tempo_changes, key=lambda x: x[0]):
+            row = tick_pos // TICKS_PER_ROW
+            target_pattern = row // self.pattern_length
+            
+            if target_pattern >= 200:
+                break
+            
+            # Handle pattern boundaries
+            while target_pattern > pattern_index:
+                rows_left = self.pattern_length - current_row_in_pattern
+                if rows_left > 0:
+                    self._write_skip(current_pattern_data, rows_left)
+                current_pattern_data += b'\xFF'
+                self.patterns[fur_ch].append(
+                    self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
+                )
+                pattern_index += 1
+                current_pattern_data = bytearray()
+                current_row_in_pattern = 0
+            
+            row_in_pattern = row - (pattern_index * self.pattern_length)
+            skip_rows = row_in_pattern - current_row_in_pattern
+            
+            if skip_rows > 0:
+                self._write_skip(current_pattern_data, skip_rows)
+                current_row_in_pattern += skip_rows
+            
+            # Write entry with tempo effects
+            entry = self._make_entry(fx=fx_list)
+            current_pattern_data += entry
+            current_row_in_pattern += 1
+            
+            # Update effects count
+            self.effects_count[fur_ch] = max(self.effects_count[fur_ch], len(fx_list))
+        
+        # Finish last pattern
+        if current_row_in_pattern > 0:
+            rows_left = self.pattern_length - current_row_in_pattern
+            if rows_left > 0:
+                self._write_skip(current_pattern_data, rows_left)
+            current_pattern_data += b'\xFF'
+            self.patterns[fur_ch].append(
+                self._make_pattern(fur_ch, pattern_index, bytes(current_pattern_data))
+            )
+    
     def _create_ssg_drum_kit(self):
         """Create SSG drum instruments based on working Furnace drum kit
         
@@ -2178,6 +2241,30 @@ class FurnaceBuilder:
                         current_detune = detune_raw if detune_raw < 32768 else detune_raw - 65536
                     elif event.cmd == 0xEC and event.params:  # Pan p
                         current_pan = event.params[0]
+                    elif event.cmd == 0xFC and event.params:  # Tempo t
+                        # FC tt = set raw tempo (half-note BPM)
+                        # FC FF tt = set ticks per quarter
+                        # FC FE tt = add to tempo
+                        # FC FD tt = add to ticks per quarter
+                        # Store tempo changes to output on ADPCM-B channel later
+                        # Using Furnace virtual tempo: FDxx (numerator), FExx (denominator)
+                        tempo_fx = []
+                        if len(event.params) >= 2 and event.params[0] == 0xFF:
+                            # Set ticks per quarter - this affects tempo inversely
+                            # Higher TPQ = slower tempo
+                            new_tpq = event.params[1]
+                            # Use virtual tempo: ratio = 75/new_tpq
+                            tempo_fx.append((0xFD, 75))
+                            tempo_fx.append((0xFE, new_tpq))
+                        elif len(event.params) >= 2 and event.params[0] == 0xFE:
+                            # Add to tempo - relative change (skip for now)
+                            pass
+                        elif len(event.params) == 1:
+                            # Raw tempo value (half-note BPM)
+                            raw_tempo = event.params[0]
+                            tempo_fx.append((0xFD, raw_tempo))
+                        if tempo_fx:
+                            self.tempo_changes.append((tick_pos, tempo_fx))
                     elif event.cmd == 0xF6:  # Loop point L
                         loop_point_tick = tick_pos
                     elif event.cmd == 0xF0 and len(event.params) >= 4:  # SSG Envelope E
@@ -2604,6 +2691,9 @@ class FurnaceBuilder:
         
         # 3. Also handle 0xEB commands from other channels (direct OPNA rhythm triggers)
         self._opna_rhythm_to_adpcma()
+        
+        # 4. Output tempo changes on ADPCM-B channel (15)
+        self._tempo_to_adpcmb()
         
         # Determine order count
         self.order_count = max(len(pats) for pats in self.patterns) if any(self.patterns) else 1
