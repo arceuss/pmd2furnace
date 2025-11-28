@@ -2866,8 +2866,9 @@ class FurnaceBuilder:
             pack_byte(0) * 31,
             pack_byte(0x40) * 32,  # chip volume
             pack_byte(0) * 32,     # chip panning
-            # Chip flags: for YM2608, bit 0-4 = clockSel (0=8MHz, 1=7.98MHz PC-98)
-            pack_long(1) + pack_long(0) * 31,  # First chip = 1 (7.98MHz), rest = 0
+            # Chip flag pointers (version >=119) - 0 means use defaults
+            # Clock rate will need to be set manually in Furnace for now
+            pack_long(0) * 32,
             pack_string(self.pmd.header.title or 'PMD Import'),
             pack_string(self.pmd.header.composer or ''),
             pack_float(440.0),
