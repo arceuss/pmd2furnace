@@ -1469,14 +1469,13 @@ class FurnaceBuilder:
                 'duty': [31, 30],
                 'wave': [3, 3],
             },
-            # Toms - using fixed arpeggio at PMDWin frequencies
+            # Toms - note is placed in pattern (like cymbals)
             # Low Tom: period 700 ≈ 160 Hz ≈ E-3 (note 88)
             # Mid Tom: period 500 ≈ 224 Hz ≈ A-3 (note 93)
             # High Tom: period 300 ≈ 373 Hz ≈ F#4 (note 102)
             2: {  # Low Tom
                 'name': 'Low Tom',
                 'vol': [15, 15, 14, 14, 13, 13, 0],
-                'arp_fixed': [88],  # E-3
                 'duty': [31],
                 'wave': [3],
                 'pitch': [-16],
@@ -1485,7 +1484,6 @@ class FurnaceBuilder:
             3: {  # Mid Tom
                 'name': 'Mid Tom',
                 'vol': [15, 15, 14, 14, 13, 13, 0],
-                'arp_fixed': [93],  # A-3
                 'duty': [31],
                 'wave': [3],
                 'pitch': [-8],
@@ -1494,7 +1492,6 @@ class FurnaceBuilder:
             4: {  # High Tom
                 'name': 'High Tom',
                 'vol': [15, 15, 14, 14, 13, 13, 0],
-                'arp_fixed': [102],  # F#4
                 'duty': [31],
                 'wave': [3],
                 'pitch': [-4],
@@ -2014,17 +2011,30 @@ class FurnaceBuilder:
         # Lowest set bit takes priority for SSG channel
         def get_drum_note_and_ins(drum_val):
             # Find lowest set bit to determine which SSG drum plays
-            # Cymbals/hi-hats need G-7 (note 151 in Furnace) to sound correct
-            # Furnace note numbering: C-0 = ~60, so G-7 = 60 + 7*12 + 7 = 151
-            CYMBAL_BITS = {7, 8, 9, 10}  # HH Closed, HH Open, Crash, Ride
+            # Different drums need different notes based on PMDWin frequencies
+            # Furnace note numbering: C-0 = 60
+            
+            # Note mapping by bit index (from PMDWin table.cpp frequencies)
+            DRUM_NOTES = {
+                0: 36,   # Bass Drum - C_2 (low trigger)
+                1: 36,   # Snare 1 - C_2
+                2: 88,   # Low Tom - E-3 (~160 Hz)
+                3: 93,   # Mid Tom - A-3 (~224 Hz)
+                4: 102,  # High Tom - F#4 (~373 Hz)
+                5: 36,   # Rim Shot - C_2
+                6: 36,   # Snare 2 - C_2
+                7: 151,  # HH Closed - G-7
+                8: 151,  # HH Open - G-7
+                9: 151,  # Crash - G-7
+                10: 151, # Ride - G-7
+            }
             
             for bit_idx in range(11):  # Bits 0-10
                 bit_mask = 1 << bit_idx
                 if drum_val & bit_mask:
                     # Map bit index to SSG drum instrument
                     ins = ssg_drum_map.get(bit_idx, ssg_drum_map.get(0, None))
-                    # Use G-7 (151) for cymbals/hi-hats, C-2 (36) for others
-                    note = 151 if bit_idx in CYMBAL_BITS else 36
+                    note = DRUM_NOTES.get(bit_idx, 36)
                     return note, ins
             # Fallback to bass drum
             return 36, ssg_drum_map.get(0, None)

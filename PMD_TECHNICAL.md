@@ -609,19 +609,19 @@ Common combinations:
 
 These are known-working Furnace instruments for SSG drums:
 
-| # | Name | Volume | Arp (Fixed) | Duty (Noise) | Wave |
-|---|------|--------|-------------|--------------|------|
-| 0 | Bass Drum | 15→0 (9 frames) | +28→+19 | 0 | 3→1 |
-| 1 | Snare Drum | 15→0 (14 frames) | +51→+27 | 24→31 | 3 |
-| 2 | Low Tom | 15→0 (7 frames) | +88 (E-3) | 31 | 3, pitch -16 |
-| 3 | Mid Tom | 15→0 (7 frames) | +93 (A-3) | 31 | 3, pitch -8 |
-| 4 | High Tom | 15→0 (7 frames) | +102 (F#4) | 31 | 3, pitch -4 |
-| 5 | Rim Shot | 15→0 (9 frames) | - | - | -, pitch -2 |
-| 6 | Snare 2 | 15→0 (16 frames) | - | 16→31 | 2 (noise only) |
-| 7 | Hi-Hat Closed | 15→0 (4 frames) | +91 (G-7) | 31,30 | 3 |
-| 8 | Hi-Hat Open | 15→0 (17 frames) | +91 (G-7) | 31,30 | 3 |
-| 9 | Crash Cymbal | 15→0 (17 frames) | +91 (G-7) | 0→31 | 3 |
-| 10 | Ride Cymbal | 15→0 (17 frames) | +91 (G-7) | 31,30 | 3 |
+| # | Name | Volume | Arp (Fixed) | Duty (Noise) | Wave | Pattern Note |
+|---|------|--------|-------------|--------------|------|--------------|
+| 0 | Bass Drum | 15→0 (9 frames) | +28→+19 | 0 | 3→1 | C_2 (36) |
+| 1 | Snare Drum | 15→0 (14 frames) | +51→+27 | 24→31 | 3 | C_2 (36) |
+| 2 | Low Tom | 15→0 (7 frames) | - | 31 | 3, pitch -16 | E-3 (88) |
+| 3 | Mid Tom | 15→0 (7 frames) | - | 31 | 3, pitch -8 | A-3 (93) |
+| 4 | High Tom | 15→0 (7 frames) | - | 31 | 3, pitch -4 | F#4 (102) |
+| 5 | Rim Shot | 15→0 (9 frames) | - | - | -, pitch -2 | C_2 (36) |
+| 6 | Snare 2 | 15→0 (16 frames) | - | 16→31 | 2 (noise only) | C_2 (36) |
+| 7 | Hi-Hat Closed | 15→0 (4 frames) | +91 | 31,30 | 3 | G-7 (151) |
+| 8 | Hi-Hat Open | 15→0 (17 frames) | +91 | 31,30 | 3 | G-7 (151) |
+| 9 | Crash Cymbal | 15→0 (17 frames) | +91 | 0→31 | 3 | G-7 (151) |
+| 10 | Ride Cymbal | 15→0 (17 frames) | +91 | 31,30 | 3 | G-7 (151) |
 
 **Arpeggio "Fixed" mode:** Values with 0x40000000 flag are absolute semitones from C-0.
 - +28 = E-2, +51 = D#4, +91 = G-7
