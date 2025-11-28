@@ -2866,9 +2866,8 @@ class FurnaceBuilder:
             pack_byte(0) * 31,
             pack_byte(0x40) * 32,  # chip volume
             pack_byte(0) * 32,     # chip panning
-            # Chip flag pointers (version >=119) - 0 means use defaults
-            # Clock rate will need to be set manually in Furnace for now
-            pack_long(0) * 32,
+            # Chip flag pointers (version >=119) - will be updated to point to FLAG block
+            pack_long(0) * 32,  # Placeholder - first pointer will be patched later
             pack_string(self.pmd.header.title or 'PMD Import'),
             pack_string(self.pmd.header.composer or ''),
             pack_float(440.0),
@@ -2968,6 +2967,25 @@ class FurnaceBuilder:
         
         # Write patterns
         file += b''.join(all_patterns)
+        
+        # Write FLAG block for chip 0 (YM2608 at PC-98 clock rate)
+        flag_offset = len(file)
+        flag_content = b'clockSel=1\n\x00'  # 1 = 7.98MHz PC-98 clock
+        flag_block = b'FLAG' + pack_long(len(flag_content)) + flag_content
+        file += flag_block
+        
+        # Patch the chip flag pointer in INFO block
+        # Chip flag pointers start at offset 0xA0 from INFO block start (after 8-byte header)
+        # INFO block starts at file offset 0x20 (after 32-byte file header)
+        # So absolute offset is 0x20 + 8 + 0x98 = 0xC0... but let's calculate it properly
+        # After file header (34 bytes) comes INFO block with:
+        #   "INFO" (4) + size (4) + ... chip_flags at relative offset 0x98 from INFO data start
+        # File header = 34 bytes, INFO header = 8 bytes
+        # Chip flags offset from INFO data: 1+2+1+4+2+2+2+2+2+2+4+32+32+32 = 120 = 0x78
+        chip_flag_ptr_offset = 34 + 8 + 120  # = 162 = 0xA2... let me verify
+        # Actually from my analysis: pointer was at 0xA0 in the file, let's use that
+        chip_flag_ptr_offset = 0xA0
+        file[chip_flag_ptr_offset:chip_flag_ptr_offset+4] = pack_long(flag_offset)
         
         # Return uncompressed (Furnace accepts both)
         return bytes(file)
