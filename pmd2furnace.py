@@ -1469,10 +1469,14 @@ class FurnaceBuilder:
                 'duty': [31, 30],
                 'wave': [3, 3],
             },
-            # Toms - using pitch slide (no fixed arpeggio)
+            # Toms - using fixed arpeggio at PMDWin frequencies
+            # Low Tom: period 700 ≈ 160 Hz ≈ E-3 (note 88)
+            # Mid Tom: period 500 ≈ 224 Hz ≈ A-3 (note 93)
+            # High Tom: period 300 ≈ 373 Hz ≈ F#4 (note 102)
             2: {  # Low Tom
                 'name': 'Low Tom',
                 'vol': [15, 15, 14, 14, 13, 13, 0],
+                'arp_fixed': [88],  # E-3
                 'duty': [31],
                 'wave': [3],
                 'pitch': [-16],
@@ -1481,6 +1485,7 @@ class FurnaceBuilder:
             3: {  # Mid Tom
                 'name': 'Mid Tom',
                 'vol': [15, 15, 14, 14, 13, 13, 0],
+                'arp_fixed': [93],  # A-3
                 'duty': [31],
                 'wave': [3],
                 'pitch': [-8],
@@ -1489,6 +1494,7 @@ class FurnaceBuilder:
             4: {  # High Tom
                 'name': 'High Tom',
                 'vol': [15, 15, 14, 14, 13, 13, 0],
+                'arp_fixed': [102],  # F#4
                 'duty': [31],
                 'wave': [3],
                 'pitch': [-4],
